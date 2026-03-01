@@ -18,7 +18,7 @@ SUPERMEMORY_BASE_URL = "https://api.supermemory.ai"
 def _headers() -> dict[str, str]:
     api_key = os.environ.get("SUPERMEMORY_API_KEY", "")
     return {
-        "Authorization": f"Bearer {api_key}", "x-api-key": api_key,,
+        "Authorization": f"Bearer {api_key}",
         "x-api-key": api_key,
         "Content-Type": "application/json",
     }
@@ -35,10 +35,6 @@ async def save_inspection_result(
     result: dict[str, Any],
     inspector_id: str | None = None,
 ) -> bool:
-    """
-    Save an inspection result to Supermemory as a memory.
-    Uses POST /v4/memories with containerTag = inspector_id and full metadata.
-    """
     api_key = os.environ.get("SUPERMEMORY_API_KEY", "")
     if not api_key:
         return False
@@ -100,11 +96,6 @@ async def get_inspection_history(
     inspector_id: str | None = None,
     limit: int = 10,
 ) -> list[dict[str, Any]]:
-    """
-    Retrieve past inspection records for a machine/component from Supermemory.
-    Uses POST /v4/search with containerTag and metadata filters.
-    Returns a list of inspection records (metadata from each result).
-    """
     api_key = os.environ.get("SUPERMEMORY_API_KEY", "")
     if not api_key:
         return []
@@ -158,11 +149,6 @@ async def get_all_inspection_results(
     inspector_id: str,
     limit: int = 500,
 ) -> list[dict[str, Any]]:
-    """
-    Retrieve all inspection records for an inspector from Supermemory.
-    Uses POST /v4/search with containerTag and type=inspection filter.
-    Returns a list of inspection records (metadata from each result).
-    """
     api_key = os.environ.get("SUPERMEMORY_API_KEY", "")
     if not api_key:
         return []
@@ -208,10 +194,6 @@ async def get_all_inspection_results(
 
 
 async def save_fleet(inspector_id: str, machine_names: list[str]) -> bool:
-    """
-    Save the user's fleet (list of machine names) to Supermemory.
-    Stores as a single memory with type=fleet and metadata.machines.
-    """
     api_key = os.environ.get("SUPERMEMORY_API_KEY", "")
     if not api_key:
         return False
@@ -254,10 +236,6 @@ async def save_fleet(inspector_id: str, machine_names: list[str]) -> bool:
 
 
 async def get_fleet(inspector_id: str) -> list[str]:
-    """
-    Retrieve the user's fleet (list of machine names) from Supermemory.
-    Returns the most recent fleet memory's machines list.
-    """
     api_key = os.environ.get("SUPERMEMORY_API_KEY", "")
     if not api_key:
         return []
