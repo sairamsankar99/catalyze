@@ -1,0 +1,1956 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0F1117">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>CATalyze — Field Inspection</title>
+<link rel="manifest" href="/static/manifest.json">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<style>
+/* ------------------------------------------------------------------ */
+/*  Reset & base                                                      */
+/* ------------------------------------------------------------------ */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cat:#FFCD11;--cat-dim:#b8940d;--cat-glow:rgba(255,205,17,.12);
+  --bg:#0F1117;--surface:#1A1D27;--surface2:#22252F;--surface3:#2A2D3A;
+  --text:#E8E9ED;--text-dim:#8B8D97;
+  --pass:#22c55e;--monitor:#eab308;--fail:#ef4444;
+  --radius:12px;--radius-lg:16px;--transition:.25s ease;
+  --shadow:0 2px 8px rgba(0,0,0,.3);--shadow-lg:0 8px 24px rgba(0,0,0,.4);
+  --font:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Oxygen,sans-serif;
+}
+html{font-size:15px;scroll-behavior:smooth}
+body{font-family:var(--font);background:var(--bg);color:var(--text);
+  min-height:100dvh;-webkit-tap-highlight-color:transparent;overflow-x:hidden}
+a{color:var(--cat)}
+button{font-family:inherit;cursor:pointer}
+input,select,textarea{font-family:inherit}
+
+/* ------------------------------------------------------------------ */
+/*  Layout                                                            */
+/* ------------------------------------------------------------------ */
+.app-bar{position:sticky;top:0;z-index:100;display:flex;align-items:center;
+  gap:12px;padding:16px 20px;background:var(--surface);user-select:none;
+  border-bottom:none;box-shadow:var(--shadow)}
+.app-bar::after{content:'';position:absolute;bottom:0;left:20px;right:20px;height:2px;
+  background:linear-gradient(90deg,var(--cat),var(--cat-dim),transparent);border-radius:1px}
+.app-bar h1{font-size:1.5rem;font-weight:900;letter-spacing:.8px}
+.app-bar h1 span{color:var(--cat)}
+.app-bar .version{font-size:.65rem;color:var(--text-dim);opacity:.6}
+.app-bar .spacer{flex:1}
+.user-avatar{width:32px;height:32px;border-radius:50%;background:var(--cat);color:#000;
+  font-size:.75rem;font-weight:800;display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;text-transform:uppercase}
+.inspector-pill{font-size:.78rem;font-weight:600;color:var(--text-dim)}
+.app-bar .logout-btn{font-size:.72rem;font-weight:700;padding:6px 16px;border-radius:20px;
+  border:1px solid var(--surface3);background:transparent;color:var(--text-dim);
+  cursor:pointer;transition:var(--transition);text-transform:uppercase;letter-spacing:.5px}
+.app-bar .logout-btn:hover{border-color:var(--fail);color:var(--fail);background:rgba(239,68,68,.08)}
+
+.tabs{display:flex;gap:6px;padding:12px 16px;background:var(--bg);border-bottom:none}
+.tab-btn{flex:1;padding:9px 0;font-size:.72rem;font-weight:700;text-align:center;
+  border:none;background:var(--surface);color:var(--text-dim);transition:var(--transition);
+  border-radius:var(--radius);text-transform:uppercase;letter-spacing:.6px;
+  border:1px solid transparent}
+.tab-btn.active{color:#000;background:var(--cat);box-shadow:0 2px 12px rgba(255,205,17,.25)}
+.tab-btn:hover:not(.active){color:var(--text);border-color:var(--surface3);background:var(--surface2)}
+
+.tab-panel{display:none;padding:20px 16px;max-width:780px;margin:0 auto;
+  animation:fadeIn .3s ease}
+.tab-panel.active{display:block}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ------------------------------------------------------------------ */
+/*  Welcome & hero                                                    */
+/* ------------------------------------------------------------------ */
+.welcome-msg{font-size:1.15rem;font-weight:700;margin-bottom:16px;color:var(--text)}
+.welcome-msg span{color:var(--cat)}
+.hero-health{background:var(--surface);border:1px solid var(--surface3);border-radius:var(--radius-lg);
+  padding:24px;margin-bottom:20px;display:flex;align-items:center;gap:20px;
+  background-image:linear-gradient(135deg,rgba(255,205,17,.04),transparent 60%);
+  box-shadow:var(--shadow);position:relative;overflow:hidden}
+.hero-health::before{content:'';position:absolute;inset:-1px;border-radius:var(--radius-lg);
+  padding:1px;background:linear-gradient(135deg,var(--cat),transparent 50%);
+  -webkit-mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  mask:linear-gradient(#fff 0 0) content-box,linear-gradient(#fff 0 0);
+  -webkit-mask-composite:xor;mask-composite:exclude;pointer-events:none}
+.hero-health-score{font-size:2.4rem;font-weight:900;line-height:1;min-width:80px;text-align:center}
+.hero-health-label{font-size:.7rem;text-transform:uppercase;letter-spacing:.8px;
+  color:var(--text-dim);margin-top:4px;text-align:center}
+.hero-health-info{flex:1}
+.hero-health-info h3{font-size:.95rem;font-weight:700;margin-bottom:4px}
+.hero-health-info p{font-size:.8rem;color:var(--text-dim);line-height:1.4}
+
+/* ------------------------------------------------------------------ */
+/*  Selectors                                                         */
+/* ------------------------------------------------------------------ */
+.field{margin-bottom:20px}
+.field label{display:block;font-size:.72rem;font-weight:700;text-transform:uppercase;
+  letter-spacing:1px;color:var(--text-dim);margin-bottom:8px}
+.field select{width:100%;padding:14px 18px;border-radius:var(--radius);
+  border:1px solid var(--surface3);background:var(--surface);color:var(--text);
+  font-size:1rem;font-weight:600;appearance:none;cursor:pointer;transition:var(--transition);
+  box-shadow:var(--shadow);
+  background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%23FFCD11' stroke-width='2' fill='none'/%3E%3C/svg%3E");
+  background-repeat:no-repeat;background-position:right 18px center}
+.field select:focus{outline:none;border-color:var(--cat);box-shadow:0 0 0 3px var(--cat-glow)}
+.field select:hover{border-color:var(--surface3);background:var(--surface2)}
+
+/* ------------------------------------------------------------------ */
+/*  Component checklist                                               */
+/* ------------------------------------------------------------------ */
+.checklist-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+.checklist-header h2{font-size:1.05rem;font-weight:700}
+.progress-pill{font-size:.72rem;font-weight:700;background:var(--surface);padding:5px 14px;
+  border-radius:20px;color:var(--text-dim);border:1px solid var(--surface3)}
+
+#component-list{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
+
+.comp-card{background:var(--surface);border-radius:var(--radius);padding:16px;
+  border:1px solid var(--surface3);transition:all .3s ease;box-shadow:var(--shadow);
+  position:relative;overflow:hidden}
+.comp-card:hover{border-color:var(--cat);transform:translateY(-2px);
+  box-shadow:0 6px 20px rgba(0,0,0,.4)}
+.comp-card.done{border-color:var(--surface3)}
+.comp-card.done:hover{border-color:var(--cat)}
+.comp-icon{font-size:1.4rem;margin-bottom:8px;display:block}
+.comp-top{display:flex;align-items:center;gap:10px}
+.comp-name{flex:1;font-weight:700;font-size:.88rem;text-transform:capitalize}
+.comp-actions{display:flex;gap:5px;margin-top:10px}
+.icon-btn{width:36px;height:36px;border-radius:var(--radius);border:1px solid var(--surface3);
+  background:var(--surface2);color:var(--text-dim);display:flex;align-items:center;
+  justify-content:center;transition:var(--transition);font-size:.95rem}
+.icon-btn:hover{border-color:var(--cat);color:var(--cat);background:var(--cat-glow)}
+.icon-btn.recording{border-color:var(--fail);color:var(--fail);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+.badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:.68rem;
+  font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:8px}
+.badge.pass{background:rgba(34,197,94,.12);color:var(--pass);border:1px solid rgba(34,197,94,.25)}
+.badge.monitor{background:rgba(234,179,8,.12);color:var(--monitor);border:1px solid rgba(234,179,8,.25)}
+.badge.fail{background:rgba(239,68,68,.12);color:var(--fail);border:1px solid rgba(239,68,68,.25)}
+.badge.pending{background:var(--surface2);color:var(--text-dim);border:1px solid var(--surface3)}
+.badge.invalid{background:rgba(156,163,175,.1);color:#9ca3af;border:1px solid rgba(156,163,175,.2)}
+
+.comp-observation{font-size:.78rem;color:var(--text-dim);margin-top:6px;line-height:1.4}
+.comp-action{font-size:.75rem;color:var(--monitor);margin-top:3px;font-style:italic}
+.comp-steps{margin-top:8px;padding:0;list-style:none;font-size:.75rem;line-height:1.5;color:var(--text-dim)}
+.comp-steps li{padding:2px 0;display:flex;align-items:baseline;gap:6px}
+.comp-steps li::before{content:'🔧';font-size:.7rem;flex-shrink:0}
+
+.comp-thumb{width:48px;height:48px;border-radius:8px;object-fit:cover;border:1px solid var(--surface3);margin-top:8px}
+
+/* ------------------------------------------------------------------ */
+/*  Buttons                                                           */
+/* ------------------------------------------------------------------ */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:13px 28px;border-radius:var(--radius);border:none;font-weight:700;
+  font-size:.88rem;text-transform:uppercase;letter-spacing:.7px;transition:var(--transition);
+  box-shadow:var(--shadow)}
+.btn-primary{background:var(--cat);color:#000}
+.btn-primary:hover{background:#ffe04a;box-shadow:0 4px 16px rgba(255,205,17,.3)}
+.btn-primary:active{transform:scale(.97)}
+.btn-primary:disabled{opacity:.35;cursor:not-allowed;box-shadow:none}
+.btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--surface3)}
+.btn-secondary:hover{border-color:var(--cat);background:var(--surface2)}
+.btn-full{width:100%;margin-top:20px}
+
+/* ------------------------------------------------------------------ */
+/*  Report view                                                       */
+/* ------------------------------------------------------------------ */
+.report-section{background:var(--surface);border-radius:var(--radius-lg);padding:20px;margin-bottom:16px;
+  border:1px solid var(--surface3);box-shadow:var(--shadow)}
+.report-section h3{font-size:.82rem;text-transform:uppercase;letter-spacing:.8px;
+  color:var(--text-dim);margin-bottom:14px;font-weight:700}
+
+.summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
+.summary-card{text-align:center;padding:14px;background:var(--surface2);border-radius:var(--radius);
+  border:1px solid var(--surface3);box-shadow:var(--shadow)}
+.summary-card .num{font-size:1.6rem;font-weight:800}
+.summary-card .lbl{font-size:.7rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);margin-top:2px}
+.summary-card.s-pass .num{color:var(--pass)}
+.summary-card.s-monitor .num{color:var(--monitor)}
+.summary-card.s-fail .num{color:var(--fail)}
+
+.report-table{width:100%;border-collapse:collapse;font-size:.85rem}
+.report-table th{text-align:left;padding:8px 10px;font-size:.7rem;text-transform:uppercase;
+  letter-spacing:.6px;color:var(--text-dim);border-bottom:1px solid var(--surface3)}
+.report-table td{padding:8px 10px;border-bottom:1px solid var(--surface2);vertical-align:top}
+.report-table .status-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.report-table .status-dot.pass{background:var(--pass)}
+.report-table .status-dot.monitor{background:var(--monitor)}
+.report-table .status-dot.fail{background:var(--fail)}
+
+.audio-player{width:100%;margin-top:8px;border-radius:var(--radius);height:42px}
+.audio-player::-webkit-media-controls-panel{background:var(--surface2)}
+
+/* ------------------------------------------------------------------ */
+/*  Parts ID                                                          */
+/* ------------------------------------------------------------------ */
+.parts-drop{border:2px dashed var(--surface3);border-radius:var(--radius-lg);padding:48px 20px;
+  text-align:center;color:var(--text-dim);cursor:pointer;transition:var(--transition);
+  background:var(--surface)}
+.parts-drop:hover{border-color:var(--cat);color:var(--text);background:var(--surface2)}
+.parts-drop svg{margin-bottom:10px}
+.parts-result{margin-top:16px}
+.parts-candidate{background:var(--surface);border:1px solid var(--surface3);border-radius:var(--radius);
+  padding:16px;margin-bottom:10px;display:flex;gap:12px;align-items:flex-start;
+  box-shadow:var(--shadow);transition:var(--transition)}
+.parts-candidate:hover{border-color:var(--cat);transform:translateY(-1px)}
+.parts-rank{width:28px;height:28px;border-radius:50%;background:var(--cat);color:#000;
+  font-weight:700;font-size:.8rem;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.parts-info{flex:1}
+.parts-info .pi-machine{font-weight:600;font-size:.92rem}
+.parts-info .pi-component{color:var(--cat);font-size:.85rem;text-transform:capitalize}
+.parts-info .pi-obs{font-size:.8rem;color:var(--text-dim);margin-top:4px;line-height:1.3}
+.cert-bar{height:6px;border-radius:3px;background:var(--surface3);margin-top:6px;overflow:hidden}
+.cert-bar-fill{height:100%;border-radius:3px;background:var(--cat);transition:width .4s ease}
+
+/* ------------------------------------------------------------------ */
+/*  Camera modal                                                      */
+/* ------------------------------------------------------------------ */
+.modal-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.95);
+  display:none;flex-direction:column;align-items:center;justify-content:center;padding:16px}
+.modal-overlay.open{display:flex}
+.camera-container{position:relative;width:100%;max-width:720px;pointer-events:auto;
+  display:flex;flex-direction:column;align-items:center}
+.camera-container video{width:100%;min-height:70dvh;object-fit:cover;border-radius:var(--radius-lg);background:#000}
+.camera-container canvas{display:none}
+.camera-controls{display:flex;justify-content:center;align-items:center;gap:24px;margin-top:16px;width:100%}
+.shutter-btn{width:72px;height:72px;border-radius:50%;border:4px solid var(--cat);
+  background:transparent;position:relative;transition:var(--transition);flex-shrink:0}
+.shutter-btn::after{content:'';position:absolute;inset:6px;border-radius:50%;background:var(--cat);transition:var(--transition)}
+.shutter-btn:hover::after{background:#fff}
+.cam-cancel-btn{padding:10px 24px;border-radius:var(--radius);border:1px solid var(--surface3);
+  background:var(--surface2);color:var(--text);font-size:.85rem;font-weight:700;
+  text-transform:uppercase;letter-spacing:.5px;cursor:pointer;transition:var(--transition)}
+.cam-cancel-btn:hover{border-color:var(--fail);color:var(--fail)}
+.close-cam{position:absolute;top:12px;right:12px;width:44px;height:44px;border-radius:50%;
+  border:none;background:rgba(0,0,0,.75);color:#fff;font-size:1.4rem;display:flex;
+  align-items:center;justify-content:center;z-index:210;cursor:pointer;
+  -webkit-tap-highlight-color:transparent;touch-action:manipulation}
+.close-cam:hover{background:rgba(239,68,68,.8)}
+
+/* ------------------------------------------------------------------ */
+/*  Loader / spinner                                                  */
+/* ------------------------------------------------------------------ */
+.spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--surface3);
+  border-top-color:var(--cat);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.loading-overlay{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.75);
+  display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;
+  backdrop-filter:blur(4px)}
+.loading-overlay.open{display:flex}
+.loading-overlay p{color:var(--text);font-size:.9rem;font-weight:600}
+
+/* ------------------------------------------------------------------ */
+/*  Toast                                                             */
+/* ------------------------------------------------------------------ */
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  padding:12px 24px;border-radius:var(--radius);font-size:.85rem;font-weight:700;
+  z-index:400;opacity:0;transition:opacity .3s;pointer-events:none;box-shadow:var(--shadow-lg)}
+.toast.show{opacity:1}
+.toast.error{background:var(--fail);color:#fff}
+.toast.success{background:var(--pass);color:#fff}
+.toast.info{background:var(--surface);color:var(--text);border:1px solid var(--surface3)}
+
+/* ------------------------------------------------------------------ */
+/*  Landing page                                                      */
+/* ------------------------------------------------------------------ */
+#landing-page{min-height:100dvh}
+#landing-page.hidden{display:none}
+#main-app{display:none}
+#main-app.visible{display:block}
+
+.lp-nav{position:sticky;top:0;z-index:100;display:flex;align-items:center;padding:14px 24px;
+  background:rgba(15,17,23,.92);backdrop-filter:blur(10px);border-bottom:1px solid var(--surface3)}
+.lp-nav .lp-logo{font-size:1.2rem;font-weight:800;letter-spacing:.5px;margin-right:auto}
+.lp-nav .lp-logo span{color:var(--cat)}
+.lp-nav-links{display:flex;align-items:center;gap:24px}
+.lp-nav-links a{color:var(--text-dim);text-decoration:none;font-size:.85rem;font-weight:600;
+  transition:color .2s}
+.lp-nav-links a:hover{color:var(--text)}
+.lp-nav-links .lp-signin-btn{background:var(--cat);color:#000;padding:9px 22px;
+  border-radius:var(--radius);font-weight:700;font-size:.85rem;text-decoration:none;
+  transition:all .25s ease;box-shadow:0 2px 8px rgba(255,205,17,.2)}
+.lp-nav-links .lp-signin-btn:hover{background:#ffe04a;box-shadow:0 4px 16px rgba(255,205,17,.3)}
+
+.lp-hero{text-align:center;padding:80px 24px 60px;max-width:680px;margin:0 auto}
+.lp-hero h1{font-size:3.2rem;font-weight:900;letter-spacing:-.5px;line-height:1.1;margin-bottom:16px}
+.lp-hero h1 span{color:var(--cat)}
+.lp-hero .lp-tagline{font-size:1.15rem;color:var(--text-dim);margin-bottom:36px;line-height:1.5}
+.lp-hero-btns{display:flex;gap:14px;justify-content:center;flex-wrap:wrap}
+.lp-hero-btns .btn{min-width:160px}
+
+.lp-section{padding:60px 24px;max-width:960px;margin:0 auto}
+.lp-section-title{text-align:center;font-size:1.6rem;font-weight:800;margin-bottom:8px}
+.lp-section-sub{text-align:center;font-size:.9rem;color:var(--text-dim);margin-bottom:40px}
+
+.lp-features{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:20px}
+.lp-feature{background:var(--surface);border:1px solid var(--surface3);border-radius:var(--radius-lg);
+  padding:28px 22px;text-align:center;transition:all .3s ease;box-shadow:var(--shadow)}
+.lp-feature:hover{border-color:var(--cat);transform:translateY(-4px);box-shadow:var(--shadow-lg)}
+.lp-feature .lp-icon{font-size:2rem;margin-bottom:14px}
+.lp-feature h3{font-size:1rem;font-weight:700;margin-bottom:8px}
+.lp-feature p{font-size:.82rem;color:var(--text-dim);line-height:1.5}
+
+.lp-steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:24px}
+.lp-step{text-align:center;padding:20px}
+.lp-step .lp-step-num{width:48px;height:48px;border-radius:50%;background:var(--cat);color:#000;
+  font-weight:800;font-size:1.1rem;display:flex;align-items:center;justify-content:center;
+  margin:0 auto 16px;box-shadow:0 4px 12px rgba(255,205,17,.25)}
+.lp-step h3{font-size:.95rem;font-weight:700;margin-bottom:6px}
+.lp-step p{font-size:.82rem;color:var(--text-dim);line-height:1.5}
+
+.lp-footer{text-align:center;padding:36px 24px;border-top:1px solid var(--surface3);
+  font-size:.78rem;color:var(--text-dim)}
+
+/* ------------------------------------------------------------------ */
+/*  Auth overlay                                                      */
+/* ------------------------------------------------------------------ */
+.auth-overlay{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.7);
+  display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)}
+.auth-overlay.hidden{display:none}
+.auth-box{background:var(--surface);border:1px solid var(--surface3);border-radius:var(--radius-lg);
+  padding:36px 32px;width:90%;max-width:420px;box-shadow:var(--shadow-lg)}
+.auth-box h2{font-size:1.3rem;font-weight:700;margin-bottom:4px;text-align:center}
+.auth-box h2 span{color:var(--cat)}
+.auth-box .auth-sub{font-size:.85rem;color:var(--text-dim);margin-bottom:20px;text-align:center}
+.auth-box input{width:100%;padding:12px 14px;border-radius:var(--radius);border:1px solid var(--surface3);
+  background:var(--surface2);color:var(--text);font-size:.95rem;margin-bottom:12px}
+.auth-box input:focus{outline:none;border-color:var(--cat)}
+.auth-box input.input-error{border-color:var(--fail)}
+.auth-box input::placeholder{color:var(--text-dim)}
+.pw-wrap{position:relative;width:100%;margin-bottom:12px}
+.pw-wrap input{margin-bottom:0;padding-right:44px}
+.pw-toggle{position:absolute;right:12px;top:50%;transform:translateY(-50%);
+  background:none;border:none;cursor:pointer;color:var(--text-dim);padding:0;
+  display:flex;align-items:center;justify-content:center;width:24px;height:24px;transition:color .2s}
+.pw-toggle:hover{color:var(--text)}
+.pw-toggle svg{width:20px;height:20px}
+.auth-toggle{text-align:center;margin-top:14px;font-size:.82rem;color:var(--text-dim)}
+.auth-toggle a{color:var(--cat);cursor:pointer;text-decoration:none;font-weight:600}
+.auth-toggle a:hover{text-decoration:underline}
+.auth-error{font-size:.8rem;color:var(--fail);text-align:center;margin-top:8px;display:none}
+.auth-success{font-size:.8rem;color:var(--pass);text-align:center;margin-top:8px;display:none}
+.auth-box{position:relative}
+.auth-close{position:absolute;top:12px;right:12px;width:32px;height:32px;border-radius:50%;
+  border:none;background:var(--surface2);color:var(--text-dim);font-size:1.2rem;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;transition:var(--transition)}
+.auth-close:hover{color:var(--text);background:var(--surface3)}
+
+@media(max-width:600px){
+  .lp-hero h1{font-size:2.2rem}
+  .lp-nav-links a:not(.lp-signin-btn){display:none}
+}
+
+/* ------------------------------------------------------------------ */
+/*  Analytics                                                         */
+/* ------------------------------------------------------------------ */
+.analytics-empty{text-align:center;padding:40px 0;color:var(--text-dim)}
+.health-score-card{background:var(--surface);border:1px solid var(--surface3);border-radius:var(--radius-lg);
+  padding:28px;text-align:center;margin-bottom:16px;box-shadow:var(--shadow)}
+.health-score-value{font-size:3.2rem;font-weight:900;line-height:1}
+.health-score-label{font-size:.72rem;text-transform:uppercase;letter-spacing:1px;
+  color:var(--text-dim);margin-top:6px;font-weight:700}
+.chart-card{background:var(--surface);border:1px solid var(--surface3);border-radius:var(--radius-lg);
+  padding:20px;margin-bottom:16px;box-shadow:var(--shadow)}
+.chart-card h3{font-size:.82rem;text-transform:uppercase;letter-spacing:.8px;
+  color:var(--text-dim);margin-bottom:14px;font-weight:700}
+.chart-card canvas{max-height:280px}
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* ------------------------------------------------------------------ */
+/*  Live Inspect                                                      */
+/* ------------------------------------------------------------------ */
+.live-container{position:relative;width:100%;border-radius:var(--radius-lg);overflow:hidden;
+  background:#000;aspect-ratio:4/3;box-shadow:var(--shadow-lg)}
+.live-container video{width:100%;height:100%;object-fit:cover;display:block}
+.live-overlay{position:absolute;bottom:0;left:0;right:0;padding:14px 16px;
+  background:linear-gradient(transparent,rgba(0,0,0,.85));pointer-events:none;
+  transition:opacity .3s ease}
+.live-overlay .live-component{font-size:1.1rem;font-weight:700;margin-bottom:4px}
+.live-overlay .live-observation{font-size:.85rem;color:var(--text-dim);margin-top:4px}
+.live-badge{display:inline-block;padding:3px 10px;border-radius:14px;font-size:.75rem;
+  font-weight:700;text-transform:uppercase;letter-spacing:.6px;margin-left:8px;vertical-align:middle}
+.live-badge.pass{background:var(--pass);color:#000}
+.live-badge.monitor{background:var(--monitor);color:#000}
+.live-badge.fail{background:var(--fail);color:#fff}
+.live-pulse{position:absolute;top:14px;left:16px;display:flex;align-items:center;gap:6px;
+  font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:var(--fail)}
+.live-pulse .dot{width:8px;height:8px;border-radius:50%;background:var(--fail);
+  animation:pulse-dot 1.2s ease-in-out infinite}
+@keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
+.live-controls{display:flex;gap:12px;margin-top:16px}
+.live-controls .btn{flex:1}
+.live-idle{text-align:center;padding:60px 20px;color:var(--text-dim);
+  background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--surface3);
+  box-shadow:var(--shadow)}
+.live-idle p{margin-top:8px;font-size:.85rem}
+
+/* ------------------------------------------------------------------ */
+/*  Responsive                                                        */
+/* ------------------------------------------------------------------ */
+@media(max-width:640px){
+  #component-list{grid-template-columns:1fr}
+  .hero-health{flex-direction:column;text-align:center}
+}
+@media(max-width:480px){
+  html{font-size:14px}
+  .summary-grid{grid-template-columns:repeat(2,1fr)}
+  .report-table{font-size:.78rem}
+  .charts-row{grid-template-columns:1fr}
+  .tabs{gap:4px;padding:10px 12px}
+  .tab-btn{font-size:.65rem;padding:8px 0}
+}
+</style>
+</head>
+<body>
+
+<!-- ================================================================ -->
+<!--  LANDING PAGE                                                    -->
+<!-- ================================================================ -->
+<div id="landing-page">
+
+  <nav class="lp-nav">
+    <div class="lp-logo"><span>CAT</span>alyze</div>
+    <div class="lp-nav-links">
+      <a href="#lp-features">Features</a>
+      <a href="#lp-how">How It Works</a>
+      <a href="#lp-about">About</a>
+      <a href="#" class="lp-signin-btn" id="lp-signin-btn">Sign In</a>
+    </div>
+  </nav>
+
+  <section class="lp-hero">
+    <h1><span>CAT</span>alyze</h1>
+    <p class="lp-tagline">AI-Powered Heavy Equipment Inspection. Instantly analyze machine components, track health trends, and generate professional reports — all from the field.</p>
+    <div class="lp-hero-btns">
+      <button class="btn btn-primary" id="lp-get-started">Get Started Free</button>
+      <a href="#lp-features" class="btn btn-secondary">Learn More</a>
+    </div>
+  </section>
+
+  <section class="lp-section" id="lp-features">
+    <h2 class="lp-section-title">Features</h2>
+    <p class="lp-section-sub">Everything you need for fast, accurate field inspections.</p>
+    <div class="lp-features">
+      <div class="lp-feature">
+        <div class="lp-icon">📸</div>
+        <h3>Instant AI Analysis</h3>
+        <p>Snap a photo of any component. GPT-4o Vision identifies condition and returns PASS, MONITOR, or FAIL in seconds.</p>
+      </div>
+      <div class="lp-feature">
+        <div class="lp-icon">🎙️</div>
+        <h3>Voice Inspections</h3>
+        <p>Speak your observations hands-free. AI interprets your voice notes and classifies component health automatically.</p>
+      </div>
+      <div class="lp-feature">
+        <div class="lp-icon">📊</div>
+        <h3>Health Analytics</h3>
+        <p>Track machine health scores over time with interactive charts, trend lines, and historical comparison across sessions.</p>
+      </div>
+      <div class="lp-feature">
+        <div class="lp-icon">🎥</div>
+        <h3>Live Inspection Mode</h3>
+        <p>Point your camera and get real-time AI assessments every 3 seconds. No buttons to press — just walk and inspect.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="lp-section" id="lp-how">
+    <h2 class="lp-section-title">How It Works</h2>
+    <p class="lp-section-sub">Three simple steps from field to report.</p>
+    <div class="lp-steps">
+      <div class="lp-step">
+        <div class="lp-step-num">1</div>
+        <h3>Select Machine</h3>
+        <p>Choose your equipment model. CATalyze loads every component that needs inspection for that machine.</p>
+      </div>
+      <div class="lp-step">
+        <div class="lp-step-num">2</div>
+        <h3>Inspect Components</h3>
+        <p>Capture photos or speak observations for each component. AI returns instant condition assessments with maintenance steps.</p>
+      </div>
+      <div class="lp-step">
+        <div class="lp-step-num">3</div>
+        <h3>Generate Report</h3>
+        <p>One tap produces a full color-coded report with voice narration, analytics dashboard, and downloadable summary.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="lp-section" id="lp-about">
+    <h2 class="lp-section-title">About CATalyze</h2>
+    <p class="lp-section-sub" style="max-width:600px;margin-left:auto;margin-right:auto">
+      Built for field inspectors who need speed and accuracy. CATalyze combines GPT-4o Vision,
+      voice recognition, and real-time analytics to transform heavy equipment walkaround inspections
+      into a streamlined, AI-assisted workflow. No training required — just point, shoot, and go.
+    </p>
+  </section>
+
+  <footer class="lp-footer">
+    &copy; 2026 CATalyze. AI-powered field inspection technology.
+  </footer>
+
+</div>
+
+<!-- ================================================================ -->
+<!--  AUTH OVERLAY                                                    -->
+<!-- ================================================================ -->
+<div class="auth-overlay hidden" id="auth-overlay">
+  <div class="auth-box">
+    <button class="auth-close" id="auth-close-btn" type="button" aria-label="Close">&times;</button>
+
+    <!-- Sign In Form -->
+    <div id="auth-signin">
+      <h2><span>CAT</span>alyze</h2>
+      <p class="auth-sub">Sign in to your account</p>
+      <input type="email" id="login-email" placeholder="Email" autocomplete="off">
+      <div class="pw-wrap">
+        <input type="password" id="login-password" placeholder="Password" autocomplete="off">
+        <button type="button" class="pw-toggle" aria-label="Toggle password visibility"></button>
+      </div>
+      <button class="btn btn-primary btn-full" id="btn-login" style="margin-top:0">Sign In</button>
+      <p class="auth-toggle">Don't have an account? <a id="show-signup">Sign Up</a></p>
+      <p class="auth-toggle"><a id="show-forgot">Forgot Password?</a></p>
+      <p class="auth-error" id="login-error"></p>
+    </div>
+
+    <!-- Sign Up Form -->
+    <div id="auth-signup" style="display:none">
+      <h2><span>CAT</span>alyze</h2>
+      <p class="auth-sub">Create a new account</p>
+      <input type="email" id="reg-email" placeholder="Email" autocomplete="off">
+      <input type="text" id="reg-username" placeholder="Username" autocomplete="off">
+      <div class="pw-wrap">
+        <input type="password" id="reg-password" placeholder="Password" autocomplete="off">
+        <button type="button" class="pw-toggle" aria-label="Toggle password visibility"></button>
+      </div>
+      <div class="pw-wrap">
+        <input type="password" id="reg-confirm" placeholder="Confirm Password" autocomplete="off">
+        <button type="button" class="pw-toggle" aria-label="Toggle password visibility"></button>
+      </div>
+      <button class="btn btn-primary btn-full" id="btn-register" style="margin-top:0">Create Account</button>
+      <p class="auth-toggle">Already have an account? <a id="show-signin">Sign In</a></p>
+      <p class="auth-error" id="reg-error"></p>
+    </div>
+
+    <!-- Email Verification Form -->
+    <div id="auth-verify" style="display:none">
+      <h2><span>CAT</span>alyze</h2>
+      <p class="auth-sub">Verify your email</p>
+      <p class="auth-success" id="verify-sent-msg" style="display:block;margin-bottom:14px"></p>
+      <input type="text" id="verify-code" placeholder="6-digit code" maxlength="6" inputmode="numeric" autocomplete="off">
+      <button class="btn btn-primary btn-full" id="btn-verify-email" style="margin-top:0">Verify Email</button>
+      <p class="auth-toggle"><a id="back-to-signup">Back to Sign Up</a></p>
+      <p class="auth-error" id="verify-error"></p>
+    </div>
+
+    <!-- Forgot Password Form -->
+    <div id="auth-forgot" style="display:none">
+      <h2><span>CAT</span>alyze</h2>
+      <p class="auth-sub">Reset your password</p>
+
+      <!-- Step 1: enter email -->
+      <div id="forgot-step-email">
+        <input type="email" id="forgot-email" placeholder="Email" autocomplete="off">
+        <button class="btn btn-primary btn-full" id="btn-send-reset" style="margin-top:0">Send Reset Code</button>
+      </div>
+
+      <!-- Step 2: enter code + new password -->
+      <div id="forgot-step-code" style="display:none">
+        <p class="auth-success" id="forgot-sent-msg" style="display:block;margin-bottom:14px"></p>
+        <input type="text" id="forgot-code" placeholder="6-digit code" maxlength="6" inputmode="numeric" autocomplete="off">
+        <div class="pw-wrap">
+          <input type="password" id="forgot-new-pw" placeholder="New Password" autocomplete="off">
+          <button type="button" class="pw-toggle" aria-label="Toggle password visibility"></button>
+        </div>
+        <div class="pw-wrap">
+          <input type="password" id="forgot-confirm-pw" placeholder="Confirm New Password" autocomplete="off">
+          <button type="button" class="pw-toggle" aria-label="Toggle password visibility"></button>
+        </div>
+        <button class="btn btn-primary btn-full" id="btn-reset-pw" style="margin-top:0">Reset Password</button>
+      </div>
+
+      <p class="auth-toggle"><a id="back-to-login">Back to Sign In</a></p>
+      <p class="auth-error" id="forgot-error"></p>
+      <p class="auth-success" id="forgot-success"></p>
+    </div>
+
+  </div>
+</div>
+
+<!-- ================================================================ -->
+<!--  MAIN APP                                                        -->
+<!-- ================================================================ -->
+<div id="main-app">
+
+<!-- App Bar -->
+<header class="app-bar">
+  <h1><span>CAT</span>alyze</h1>
+  <span class="version">v0.1</span>
+  <span class="spacer"></span>
+  <div class="user-avatar" id="user-avatar"></div>
+  <span class="inspector-pill" id="inspector-pill"></span>
+  <button class="logout-btn" id="btn-logout" type="button">Logout</button>
+</header>
+
+<!-- Tabs -->
+<nav class="tabs">
+  <button class="tab-btn active" data-tab="inspect">Inspect</button>
+  <button class="tab-btn" data-tab="report">Report</button>
+  <button class="tab-btn" data-tab="parts">Parts ID</button>
+  <button class="tab-btn" data-tab="live">Live</button>
+  <button class="tab-btn" data-tab="analytics">Analytics</button>
+</nav>
+
+<!-- ================================================================ -->
+<!--  INSPECT TAB                                                     -->
+<!-- ================================================================ -->
+<section id="tab-inspect" class="tab-panel active">
+
+  <p class="welcome-msg" id="welcome-msg">Good morning, <span>Inspector</span></p>
+
+  <div class="hero-health" id="hero-health">
+    <div>
+      <div class="hero-health-score" id="hero-health-score">—</div>
+      <div class="hero-health-label">Fleet Health</div>
+    </div>
+    <div class="hero-health-info">
+      <h3>Overall Equipment Status</h3>
+      <p id="hero-health-desc">Select a machine and begin inspecting components to see your fleet health score.</p>
+    </div>
+  </div>
+
+  <div class="field">
+    <label for="machine-select">Select Machine</label>
+    <select id="machine-select"><option value="">Choose a machine…</option></select>
+  </div>
+
+  <div class="checklist-header">
+    <h2>Components</h2>
+    <span class="progress-pill" id="progress">0 / 0</span>
+  </div>
+
+  <div id="component-list"></div>
+
+  <button class="btn btn-primary btn-full" id="btn-report" disabled>
+    Generate Report
+  </button>
+</section>
+
+<!-- ================================================================ -->
+<!--  REPORT TAB                                                      -->
+<!-- ================================================================ -->
+<section id="tab-report" class="tab-panel">
+
+  <div id="report-empty" style="text-align:center;padding:60px 20px;color:var(--text-dim);
+    background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--surface3)">
+    <p style="font-size:1.5rem;margin-bottom:8px">📋</p>
+    No report generated yet. Complete an inspection first.
+  </div>
+
+  <div id="report-content" style="display:none">
+    <div class="report-section">
+      <h3>Summary</h3>
+      <div class="summary-grid" id="summary-grid"></div>
+    </div>
+
+    <div class="report-section">
+      <h3>Voice Summary</h3>
+      <audio id="report-audio" class="audio-player" controls></audio>
+      <p id="no-audio" style="font-size:.8rem;color:var(--text-dim);margin-top:6px;display:none">
+        Audio unavailable — ElevenLabs API key not configured.
+      </p>
+    </div>
+
+    <div class="report-section">
+      <h3>Detailed Results</h3>
+      <div style="overflow-x:auto">
+        <table class="report-table">
+          <thead><tr><th></th><th>Component</th><th>Confidence</th><th>Observation</th><th>Action</th></tr></thead>
+          <tbody id="report-tbody"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <button class="btn btn-secondary btn-full" id="btn-download">Download Report</button>
+  </div>
+</section>
+
+<!-- ================================================================ -->
+<!--  PARTS ID TAB                                                    -->
+<!-- ================================================================ -->
+<section id="tab-parts" class="tab-panel">
+
+  <div class="parts-drop" id="parts-drop">
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <rect x="3" y="3" width="18" height="18" rx="3"/><circle cx="12" cy="12" r="3.5"/>
+      <path d="M3 8h2M19 8h2M8 3v2M8 19v2"/>
+    </svg>
+    <p style="font-weight:600;margin-bottom:4px">Tap to capture a part photo</p>
+    <p style="font-size:.8rem">Identify unknown components instantly</p>
+  </div>
+  <input type="file" id="parts-file" accept="image/*" capture="environment" hidden>
+
+  <div id="parts-preview" style="display:none;margin-top:16px;text-align:center">
+    <img id="parts-img" style="max-width:100%;max-height:240px;border-radius:var(--radius);border:1px solid var(--surface3)">
+  </div>
+
+  <div class="parts-result" id="parts-result"></div>
+</section>
+
+<!-- ================================================================ -->
+<!--  LIVE INSPECT TAB                                                -->
+<!-- ================================================================ -->
+<section id="tab-live" class="tab-panel">
+
+  <div id="live-idle" class="live-idle">
+    <p style="font-size:1.6rem">🎥</p>
+    <p style="font-weight:600;margin-bottom:4px">Live Equipment Inspection</p>
+    <p>Point your camera at any component. AI identifies and assesses it in real time.</p>
+    <button class="btn btn-primary" id="btn-start-live" style="margin-top:20px">Start Live Inspect</button>
+  </div>
+
+  <div id="live-active" style="display:none">
+    <div class="live-container">
+      <video id="live-video" autoplay playsinline muted></video>
+      <canvas id="live-canvas" style="display:none"></canvas>
+      <div class="live-pulse" id="live-pulse" style="display:none">
+        <span class="dot"></span> LIVE
+      </div>
+      <div class="live-overlay" id="live-overlay" style="opacity:0">
+        <div>
+          <span class="live-component" id="live-comp">—</span>
+          <span class="live-badge pending" id="live-badge">—</span>
+        </div>
+        <div class="live-observation" id="live-obs">Waiting for first analysis…</div>
+      </div>
+    </div>
+    <div class="live-controls">
+      <button class="btn btn-secondary" id="btn-stop-live">Stop</button>
+    </div>
+  </div>
+
+</section>
+
+<!-- ================================================================ -->
+<!--  ANALYTICS TAB                                                   -->
+<!-- ================================================================ -->
+<section id="tab-analytics" class="tab-panel">
+
+  <div id="analytics-empty" class="analytics-empty">
+    No inspection data yet. Inspect components to see analytics.
+  </div>
+
+  <div id="analytics-content" style="display:none">
+    <div class="health-score-card">
+      <div class="health-score-value" id="health-score">—</div>
+      <div class="health-score-label">Machine Health Score</div>
+    </div>
+
+    <div class="charts-row">
+      <div class="chart-card">
+        <h3>Status Breakdown</h3>
+        <canvas id="donut-chart"></canvas>
+      </div>
+      <div class="chart-card">
+        <h3>Results by Component</h3>
+        <canvas id="bar-chart"></canvas>
+      </div>
+    </div>
+
+    <div class="chart-card">
+      <h3>Component Health Timeline</h3>
+      <canvas id="timeline-chart" style="max-height:320px"></canvas>
+      <p id="timeline-note" style="font-size:.75rem;color:var(--text-dim);margin-top:8px;display:none">
+        Showing historical data from past sessions via Supermemory.
+      </p>
+    </div>
+  </div>
+
+</section>
+
+</div><!-- /main-app -->
+
+<!-- ================================================================ -->
+<!--  Camera modal                                                    -->
+<!-- ================================================================ -->
+<div class="modal-overlay" id="camera-modal">
+  <div class="camera-container">
+    <button class="close-cam" id="close-cam" type="button" aria-label="Close camera">&times;</button>
+    <video id="camera-video" autoplay playsinline></video>
+    <canvas id="camera-canvas"></canvas>
+    <div class="camera-controls">
+      <button class="cam-cancel-btn" id="cam-cancel-btn" type="button">Cancel</button>
+      <button class="shutter-btn" id="shutter-btn"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Loading overlay -->
+<div class="loading-overlay" id="loader">
+  <div class="spinner" style="width:36px;height:36px;border-width:3px"></div>
+  <p id="loader-text">Analyzing…</p>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<!-- Hidden file input for component image upload -->
+<input type="file" id="comp-upload-input" accept="image/*" hidden>
+
+<script>
+/* ================================================================== */
+/*  State                                                             */
+/* ================================================================== */
+let machines = {};
+let currentMachine = '';
+let results = {};          // { componentName: {status, confidence, observation, recommended_action, …} }
+let inspectionOrder = [];  // tracks order of inspections for timeline
+let activeStream = null;   // camera MediaStream
+let captureTarget = null;  // which component the camera is open for
+let recognition = null;    // SpeechRecognition instance
+
+let pendingVerifyEmail = '';
+function getInspectorId() { return localStorage.getItem('catalyze_inspector') || ''; }
+
+/* ================================================================== */
+/*  Boot                                                              */
+/* ================================================================== */
+document.addEventListener('DOMContentLoaded', async () => {
+  initSignIn();
+  initPwToggles();
+  initTabs();
+  await loadMachines();
+  initCamera();
+  initPartsID();
+  initLive();
+  document.getElementById('btn-report').addEventListener('click', generateReport);
+  document.getElementById('btn-download').addEventListener('click', downloadReport);
+});
+
+/* ================================================================== */
+/*  Auth & Landing Page                                               */
+/* ================================================================== */
+function showApp() {
+  document.getElementById('landing-page').classList.add('hidden');
+  document.getElementById('auth-overlay').classList.add('hidden');
+  document.getElementById('main-app').classList.add('visible');
+  const name = getInspectorId();
+  document.getElementById('inspector-pill').textContent = name;
+  const initials = name.split(/\s+/).map(w => w[0]).join('').slice(0,2).toUpperCase() || '?';
+  document.getElementById('user-avatar').textContent = initials;
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  document.getElementById('welcome-msg').innerHTML = `${greeting}, <span>${name}</span>`;
+}
+
+function showLanding() {
+  document.getElementById('main-app').classList.remove('visible');
+  document.getElementById('auth-overlay').classList.add('hidden');
+  document.getElementById('landing-page').classList.remove('hidden');
+}
+
+function openAuth(mode) {
+  if (mode !== 'verify') clearAuthForms();
+  const overlay = document.getElementById('auth-overlay');
+  overlay.classList.remove('hidden');
+  document.getElementById('auth-signin').style.display = mode === 'login' ? 'block' : 'none';
+  document.getElementById('auth-signup').style.display = mode === 'register' ? 'block' : 'none';
+  document.getElementById('auth-verify').style.display = mode === 'verify' ? 'block' : 'none';
+  document.getElementById('auth-forgot').style.display = mode === 'forgot' ? 'block' : 'none';
+  if (mode === 'login') document.getElementById('login-email').focus();
+  else if (mode === 'register') document.getElementById('reg-email').focus();
+  else if (mode === 'verify') document.getElementById('verify-code').focus();
+  else if (mode === 'forgot') document.getElementById('forgot-email').focus();
+}
+
+function clearAuthForms() {
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-password').value = '';
+  document.getElementById('reg-email').value = '';
+  document.getElementById('reg-username').value = '';
+  document.getElementById('reg-password').value = '';
+  document.getElementById('reg-confirm').value = '';
+  document.getElementById('verify-code').value = '';
+  document.getElementById('forgot-email').value = '';
+  document.getElementById('forgot-code').value = '';
+  document.getElementById('forgot-new-pw').value = '';
+  document.getElementById('forgot-confirm-pw').value = '';
+  document.getElementById('login-error').style.display = 'none';
+  document.getElementById('reg-error').style.display = 'none';
+  document.getElementById('verify-error').style.display = 'none';
+  document.getElementById('forgot-error').style.display = 'none';
+  document.getElementById('forgot-success').style.display = 'none';
+  document.getElementById('forgot-step-email').style.display = 'block';
+  document.getElementById('forgot-step-code').style.display = 'none';
+  document.querySelectorAll('.auth-box input').forEach(f => f.classList.remove('input-error'));
+}
+
+function clearAuthErrors() {
+  document.getElementById('login-error').style.display = 'none';
+  document.getElementById('reg-error').style.display = 'none';
+}
+
+function initSignIn() {
+  const pill = document.getElementById('inspector-pill');
+
+  if (getInspectorId()) {
+    showApp();
+  }
+
+  document.getElementById('lp-signin-btn').addEventListener('click', (e) => { e.preventDefault(); openAuth('login'); });
+  document.getElementById('lp-get-started').addEventListener('click', () => openAuth('register'));
+  document.getElementById('show-signup').addEventListener('click', () => openAuth('register'));
+  document.getElementById('show-signin').addEventListener('click', () => openAuth('login'));
+  document.getElementById('show-forgot').addEventListener('click', () => openAuth('forgot'));
+  document.getElementById('back-to-login').addEventListener('click', () => openAuth('login'));
+  document.getElementById('back-to-signup').addEventListener('click', () => openAuth('register'));
+
+  document.getElementById('auth-close-btn').addEventListener('click', () => {
+    clearAuthForms();
+    document.getElementById('auth-overlay').classList.add('hidden');
+  });
+
+  // --- Login ---
+  const btnLogin = document.getElementById('btn-login');
+  const loginErr = document.getElementById('login-error');
+
+  const loginFields = [document.getElementById('login-email'), document.getElementById('login-password')];
+  loginFields.forEach(f => f.addEventListener('input', () => f.classList.remove('input-error')));
+
+  async function doLogin() {
+    const fields = loginFields;
+    const empty = fields.filter(f => !f.value.trim());
+    if (empty.length) {
+      empty.forEach(f => f.classList.add('input-error'));
+      loginErr.textContent = 'Please fill in all fields';
+      loginErr.style.display = 'block';
+      return;
+    }
+    const email = fields[0].value.trim();
+    const password = fields[1].value;
+    loginErr.style.display = 'none';
+    btnLogin.disabled = true;
+    btnLogin.textContent = 'Signing in…';
+    try {
+      const resp = await fetch('/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      });
+      const data = await resp.json();
+      if (!data.success) throw new Error(data.error || 'Login failed');
+      localStorage.setItem('catalyze_inspector', data.username || data.user_id);
+      showApp();
+    } catch (e) {
+      loginErr.textContent = e.message;
+      loginErr.style.display = 'block';
+    } finally {
+      btnLogin.disabled = false;
+      btnLogin.textContent = 'Sign In';
+    }
+  }
+  btnLogin.addEventListener('click', doLogin);
+  document.getElementById('login-password').addEventListener('keydown', (e) => { if (e.key === 'Enter') doLogin(); });
+
+  // --- Register ---
+  const btnReg = document.getElementById('btn-register');
+  const regErr = document.getElementById('reg-error');
+
+  const regFields = [document.getElementById('reg-email'), document.getElementById('reg-username'), document.getElementById('reg-password'), document.getElementById('reg-confirm')];
+  regFields.forEach(f => f.addEventListener('input', () => f.classList.remove('input-error')));
+
+  async function doRegister() {
+    const fields = regFields;
+    const empty = fields.filter(f => !f.value.trim());
+    if (empty.length) {
+      empty.forEach(f => f.classList.add('input-error'));
+      regErr.textContent = 'Please fill in all fields';
+      regErr.style.display = 'block';
+      return;
+    }
+    const email = fields[0].value.trim();
+    const username = fields[1].value.trim();
+    const password = fields[2].value;
+    const confirm_password = fields[3].value;
+    regErr.style.display = 'none';
+    btnReg.disabled = true;
+    btnReg.textContent = 'Creating…';
+    try {
+      const resp = await fetch('/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, username, password, confirm_password }),
+      });
+      const data = await resp.json();
+      if (!resp.ok) {
+        const msg = (data.detail && data.detail.message) || data.detail || 'Registration failed';
+        throw new Error(msg);
+      }
+      if (!data.success) throw new Error(data.error || 'Registration failed');
+      pendingVerifyEmail = email;
+      document.getElementById('verify-sent-msg').textContent = 'Verification code sent to ' + email;
+      openAuth('verify');
+    } catch (e) {
+      regErr.textContent = e.message;
+      regErr.style.display = 'block';
+    } finally {
+      btnReg.disabled = false;
+      btnReg.textContent = 'Create Account';
+    }
+  }
+  btnReg.addEventListener('click', doRegister);
+  document.getElementById('reg-confirm').addEventListener('keydown', (e) => { if (e.key === 'Enter') doRegister(); });
+
+  // --- Verify Email ---
+  const verifyErr = document.getElementById('verify-error');
+  const verifyCodeInput = document.getElementById('verify-code');
+  verifyCodeInput.addEventListener('input', () => verifyCodeInput.classList.remove('input-error'));
+
+  const btnVerifyEmail = document.getElementById('btn-verify-email');
+  async function doVerifyEmail() {
+    const code = verifyCodeInput.value.trim();
+    if (!code) {
+      verifyCodeInput.classList.add('input-error');
+      verifyErr.textContent = 'Please fill in all fields';
+      verifyErr.style.display = 'block';
+      return;
+    }
+    verifyErr.style.display = 'none';
+    btnVerifyEmail.disabled = true;
+    btnVerifyEmail.textContent = 'Verifying…';
+    try {
+      const resp = await fetch('/auth/verify-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: pendingVerifyEmail, code }),
+      });
+      const data = await resp.json();
+      if (!data.success) throw new Error(data.error || 'Verification failed');
+      localStorage.setItem('catalyze_inspector', data.username || data.user_id);
+      showApp();
+    } catch (e) {
+      verifyErr.textContent = e.message;
+      verifyErr.style.display = 'block';
+    } finally {
+      btnVerifyEmail.disabled = false;
+      btnVerifyEmail.textContent = 'Verify Email';
+    }
+  }
+  btnVerifyEmail.addEventListener('click', doVerifyEmail);
+  verifyCodeInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') doVerifyEmail(); });
+
+  // --- Forgot Password ---
+  const forgotErr = document.getElementById('forgot-error');
+  const forgotSuccess = document.getElementById('forgot-success');
+  const forgotFields = [document.getElementById('forgot-email')];
+  forgotFields.forEach(f => f.addEventListener('input', () => f.classList.remove('input-error')));
+  const resetFields = [document.getElementById('forgot-code'), document.getElementById('forgot-new-pw'), document.getElementById('forgot-confirm-pw')];
+  resetFields.forEach(f => f.addEventListener('input', () => f.classList.remove('input-error')));
+
+  const btnSendReset = document.getElementById('btn-send-reset');
+  async function doSendReset() {
+    const emailEl = document.getElementById('forgot-email');
+    if (!emailEl.value.trim()) {
+      emailEl.classList.add('input-error');
+      forgotErr.textContent = 'Please fill in all fields';
+      forgotErr.style.display = 'block';
+      return;
+    }
+    forgotErr.style.display = 'none';
+    forgotSuccess.style.display = 'none';
+    btnSendReset.disabled = true;
+    btnSendReset.textContent = 'Sending…';
+    try {
+      const resp = await fetch('/auth/forgot-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: emailEl.value.trim() }),
+      });
+      const data = await resp.json();
+      if (!data.success) throw new Error(data.error || 'Failed to send code');
+      document.getElementById('forgot-step-email').style.display = 'none';
+      document.getElementById('forgot-step-code').style.display = 'block';
+      document.getElementById('forgot-sent-msg').textContent = 'Reset code sent to ' + emailEl.value.trim();
+      document.getElementById('forgot-code').focus();
+    } catch (e) {
+      forgotErr.textContent = e.message;
+      forgotErr.style.display = 'block';
+    } finally {
+      btnSendReset.disabled = false;
+      btnSendReset.textContent = 'Send Reset Code';
+    }
+  }
+  btnSendReset.addEventListener('click', doSendReset);
+  document.getElementById('forgot-email').addEventListener('keydown', (e) => { if (e.key === 'Enter') doSendReset(); });
+
+  const btnResetPw = document.getElementById('btn-reset-pw');
+  async function doResetPw() {
+    const fields = resetFields;
+    const empty = fields.filter(f => !f.value.trim());
+    if (empty.length) {
+      empty.forEach(f => f.classList.add('input-error'));
+      forgotErr.textContent = 'Please fill in all fields';
+      forgotErr.style.display = 'block';
+      return;
+    }
+    forgotErr.style.display = 'none';
+    forgotSuccess.style.display = 'none';
+    btnResetPw.disabled = true;
+    btnResetPw.textContent = 'Resetting…';
+    try {
+      const resp = await fetch('/auth/reset-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: document.getElementById('forgot-email').value.trim(),
+          code: document.getElementById('forgot-code').value.trim(),
+          new_password: document.getElementById('forgot-new-pw').value,
+          confirm_password: document.getElementById('forgot-confirm-pw').value,
+        }),
+      });
+      const data = await resp.json();
+      if (!data.success) throw new Error(data.error || 'Reset failed');
+      forgotErr.style.display = 'none';
+      forgotSuccess.textContent = 'Password reset successfully! You can now sign in.';
+      forgotSuccess.style.display = 'block';
+      setTimeout(() => openAuth('login'), 2000);
+    } catch (e) {
+      forgotErr.textContent = e.message;
+      forgotErr.style.display = 'block';
+    } finally {
+      btnResetPw.disabled = false;
+      btnResetPw.textContent = 'Reset Password';
+    }
+  }
+  btnResetPw.addEventListener('click', doResetPw);
+  document.getElementById('forgot-confirm-pw').addEventListener('keydown', (e) => { if (e.key === 'Enter') doResetPw(); });
+
+  // --- Sign out ---
+  document.getElementById('btn-logout').addEventListener('click', () => {
+    localStorage.removeItem('catalyze_inspector');
+    pill.textContent = '';
+    results = {};
+    inspectionOrder = [];
+    currentMachine = '';
+    document.getElementById('component-list').innerHTML = '';
+    updateProgress();
+    showLanding();
+  });
+}
+
+/* ================================================================== */
+/*  Password visibility toggles                                       */
+/* ================================================================== */
+const EYE_OPEN = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>';
+const EYE_CLOSED = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/><line x1="1" y1="1" x2="23" y2="23"/></svg>';
+
+function initPwToggles() {
+  document.querySelectorAll('.pw-toggle').forEach(btn => {
+    btn.innerHTML = EYE_OPEN;
+    btn.addEventListener('click', () => {
+      const input = btn.parentElement.querySelector('input');
+      const showing = input.type === 'text';
+      input.type = showing ? 'password' : 'text';
+      btn.innerHTML = showing ? EYE_OPEN : EYE_CLOSED;
+    });
+  });
+}
+
+/* ================================================================== */
+/*  Tabs                                                              */
+/* ================================================================== */
+function initTabs() {
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+      if (btn.dataset.tab !== 'live') stopLive();
+      if (btn.dataset.tab === 'analytics') renderAnalytics();
+    });
+  });
+}
+
+/* ================================================================== */
+/*  Machines & components                                             */
+/* ================================================================== */
+async function loadMachines() {
+  try {
+    const resp = await fetch('/machines');
+    machines = await resp.json();
+    const sel = document.getElementById('machine-select');
+    sel.innerHTML = '<option value="">— Select a machine —</option>';
+    Object.keys(machines).forEach(m => {
+      sel.innerHTML += `<option value="${m}">${m}</option>`;
+    });
+    sel.addEventListener('change', () => selectMachine(sel.value));
+  } catch {
+    toast('Failed to load machines', 'error');
+  }
+}
+
+function selectMachine(name) {
+  currentMachine = name;
+  results = {};
+  inspectionOrder = [];
+  const list = document.getElementById('component-list');
+  list.innerHTML = '';
+  if (!name || !machines[name]) { updateProgress(); return; }
+
+  machines[name].forEach(comp => {
+    list.appendChild(createComponentCard(comp));
+  });
+  updateProgress();
+}
+
+const COMP_ICONS = {
+  tire:'🛞',tires:'🛞',wheel:'🛞',wheels:'🛞',
+  engine:'⚙️',motor:'⚙️',
+  hydraulic:'💧',hose:'💧',cylinder:'💧',
+  track:'🔗',tracks:'🔗',undercarriage:'🔗',
+  bucket:'🪣',blade:'🪣',
+  cab:'🏗️',seat:'💺',mirror:'🪞',
+  brake:'🛑',brakes:'🛑',
+  light:'💡',lights:'💡',
+  filter:'🔘',coolant:'🌡️',oil:'🛢️',fluid:'🛢️',
+  belt:'⛓️',battery:'🔋',exhaust:'💨',boom:'📐',arm:'📐',stick:'📐',
+  default:'🔩'
+};
+function getCompIcon(name) {
+  const lower = name.toLowerCase();
+  for (const [k, v] of Object.entries(COMP_ICONS)) {
+    if (k !== 'default' && lower.includes(k)) return v;
+  }
+  return COMP_ICONS.default;
+}
+
+function createComponentCard(comp) {
+  const card = document.createElement('div');
+  card.className = 'comp-card';
+  card.id = 'card-' + slugify(comp);
+  const icon = getCompIcon(comp);
+  card.innerHTML = `
+    <span class="comp-icon">${icon}</span>
+    <div class="comp-top">
+      <span class="comp-name">${comp}</span>
+      <span class="badge pending" id="badge-${slugify(comp)}">Pending</span>
+    </div>
+    <div class="comp-actions">
+      <button class="icon-btn" title="Capture photo" onclick="openCamera('${esc(comp)}')">📷</button>
+      <button class="icon-btn" title="Upload image" onclick="triggerUpload('${esc(comp)}')">📁</button>
+      <button class="icon-btn" id="mic-${slugify(comp)}" title="Voice observation" onclick="toggleVoice('${esc(comp)}')">🎙️</button>
+    </div>
+    <div class="comp-observation" id="obs-${slugify(comp)}"></div>
+    <div class="comp-action" id="act-${slugify(comp)}"></div>
+    <ol class="comp-steps" id="steps-${slugify(comp)}"></ol>
+  `;
+  return card;
+}
+
+function updateComponentUI(comp, data) {
+  const s = slugify(comp);
+  const badge = document.getElementById('badge-' + s);
+  const obs = document.getElementById('obs-' + s);
+  const act = document.getElementById('act-' + s);
+  const stepsEl = document.getElementById('steps-' + s);
+  const card = document.getElementById('card-' + s);
+  if (!badge) return;
+
+  const status = (data.status || 'UNKNOWN').toUpperCase();
+  const cls = status === 'PASS' ? 'pass' : status === 'MONITOR' ? 'monitor' : status === 'FAIL' ? 'fail' : status === 'INVALID' ? 'invalid' : 'pending';
+  badge.className = 'badge ' + cls;
+  badge.textContent = status + (data.confidence != null ? ` ${Math.round(data.confidence * 100)}%` : '');
+  obs.textContent = data.observation || '';
+  act.textContent = status !== 'PASS' && data.recommended_action ? '→ ' + data.recommended_action : '';
+
+  if (stepsEl) {
+    stepsEl.innerHTML = '';
+    const steps = data.maintenance_steps || [];
+    steps.forEach(step => {
+      const li = document.createElement('li');
+      li.textContent = step;
+      stepsEl.appendChild(li);
+    });
+  }
+
+  if (card) card.classList.add('done');
+  updateProgress();
+}
+
+function updateProgress() {
+  const total = machines[currentMachine]?.length || 0;
+  const done = Object.keys(results).length;
+  document.getElementById('progress').textContent = `${done} / ${total}`;
+  document.getElementById('btn-report').disabled = done === 0;
+  updateHeroHealth();
+}
+
+function updateHeroHealth() {
+  const scoreEl = document.getElementById('hero-health-score');
+  const descEl = document.getElementById('hero-health-desc');
+  const vals = Object.values(results);
+  if (!vals.length) {
+    scoreEl.textContent = '—';
+    scoreEl.style.color = 'var(--text-dim)';
+    descEl.textContent = 'Select a machine and begin inspecting components to see your fleet health score.';
+    return;
+  }
+  const map = {PASS:100, MONITOR:50, FAIL:0};
+  let sum = 0, count = 0;
+  vals.forEach(r => {
+    const s = (r.status || '').toUpperCase();
+    if (s in map) { sum += map[s]; count++; }
+  });
+  const pct = count ? Math.round(sum / count) : 0;
+  scoreEl.textContent = pct + '%';
+  scoreEl.style.color = pct >= 80 ? 'var(--pass)' : pct >= 50 ? 'var(--monitor)' : 'var(--fail)';
+  const passN = vals.filter(r => (r.status||'').toUpperCase() === 'PASS').length;
+  const monN = vals.filter(r => (r.status||'').toUpperCase() === 'MONITOR').length;
+  const failN = vals.filter(r => (r.status||'').toUpperCase() === 'FAIL').length;
+  descEl.textContent = `${passN} passed · ${monN} monitoring · ${failN} failed out of ${vals.length} inspected`;
+}
+
+/* ================================================================== */
+/*  Camera                                                            */
+/* ================================================================== */
+function initCamera() {
+  document.getElementById('close-cam').addEventListener('click', (e) => {
+    e.stopPropagation();
+    closeCamera();
+  });
+  document.getElementById('camera-modal').addEventListener('click', (e) => {
+    if (e.target.id === 'camera-modal') closeCamera();
+  });
+  document.getElementById('shutter-btn').addEventListener('click', capturePhoto);
+  document.getElementById('cam-cancel-btn').addEventListener('click', closeCamera);
+}
+
+async function openCamera(comp) {
+  captureTarget = comp;
+  const modal = document.getElementById('camera-modal');
+  const video = document.getElementById('camera-video');
+  try {
+    activeStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 } }
+    });
+    video.srcObject = activeStream;
+    modal.classList.add('open');
+  } catch {
+    toast('Camera access denied', 'error');
+  }
+}
+
+function closeCamera() {
+  const modal = document.getElementById('camera-modal');
+  const video = document.getElementById('camera-video');
+  if (activeStream) {
+    activeStream.getTracks().forEach(track => track.stop());
+    activeStream = null;
+  }
+  video.srcObject = null;
+  modal.classList.remove('open');
+  video.srcObject = null;
+}
+
+async function capturePhoto() {
+  const video = document.getElementById('camera-video');
+  const canvas = document.getElementById('camera-canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+  closeCamera();
+
+  canvas.toBlob(async blob => {
+    if (!blob || !captureTarget) return;
+    await analyzeImage(blob, captureTarget);
+  }, 'image/jpeg', 0.85);
+}
+
+let uploadTarget = null;
+
+function triggerUpload(comp) {
+  uploadTarget = comp;
+  const input = document.getElementById('comp-upload-input');
+  input.value = '';
+  input.onchange = async () => {
+    const file = input.files[0];
+    if (!file || !uploadTarget) return;
+    await analyzeImage(file, uploadTarget);
+  };
+  input.click();
+}
+
+async function analyzeImage(blob, comp) {
+  showLoader('Analyzing photo…');
+  const form = new FormData();
+  form.append('image', blob, 'capture.jpg');
+  form.append('machine', currentMachine);
+  form.append('component', comp);
+  form.append('inspector_id', getInspectorId());
+  try {
+    const resp = await fetch('/inspect/image', { method: 'POST', body: form });
+    if (!resp.ok) throw new Error(resp.statusText);
+    const data = await resp.json();
+    results[comp] = data;
+    if (!inspectionOrder.includes(comp)) inspectionOrder.push(comp);
+    updateComponentUI(comp, data);
+    toast(`${comp}: ${data.status}`, data.status === 'FAIL' ? 'error' : 'success');
+  } catch (e) {
+    toast('Analysis failed: ' + e.message, 'error');
+  } finally {
+    hideLoader();
+  }
+}
+
+/* ================================================================== */
+/*  Voice (Web Speech API)                                            */
+/* ================================================================== */
+function toggleVoice(comp) {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) { toast('Speech recognition not supported', 'error'); return; }
+
+  const btn = document.getElementById('mic-' + slugify(comp));
+
+  if (recognition) {
+    recognition.stop();
+    recognition = null;
+    btn.classList.remove('recording');
+    return;
+  }
+
+  recognition = new SpeechRecognition();
+  recognition.continuous = false;
+  recognition.interimResults = false;
+  recognition.lang = 'en-US';
+  btn.classList.add('recording');
+
+  recognition.onresult = async (e) => {
+    const text = e.results[0][0].transcript;
+    btn.classList.remove('recording');
+    recognition = null;
+    await analyzeVoice(comp, text);
+  };
+  recognition.onerror = () => {
+    btn.classList.remove('recording');
+    recognition = null;
+    toast('Voice capture failed', 'error');
+  };
+  recognition.onend = () => {
+    btn.classList.remove('recording');
+  };
+  recognition.start();
+}
+
+async function analyzeVoice(comp, text) {
+  showLoader('Processing voice note…');
+  try {
+    const resp = await fetch('/inspect/voice', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ machine: currentMachine, component: comp, voice_text: text, inspector_id: getInspectorId() }),
+    });
+    if (!resp.ok) throw new Error(resp.statusText);
+    const data = await resp.json();
+    results[comp] = data;
+    if (!inspectionOrder.includes(comp)) inspectionOrder.push(comp);
+    updateComponentUI(comp, data);
+    toast(`${comp}: ${data.status}`, data.status === 'FAIL' ? 'error' : 'success');
+  } catch (e) {
+    toast('Voice analysis failed: ' + e.message, 'error');
+  } finally {
+    hideLoader();
+  }
+}
+
+/* ================================================================== */
+/*  Report                                                            */
+/* ================================================================== */
+async function generateReport() {
+  showLoader('Generating report…');
+  try {
+    const payload = {
+      machine: currentMachine,
+      inspector: getInspectorId() || null,
+      results: Object.entries(results).map(([comp, r]) => ({ component: comp, ...r })),
+    };
+    const resp = await fetch('/report/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    if (!resp.ok) throw new Error(resp.statusText);
+    const report = await resp.json();
+    renderReport(report);
+    document.querySelector('[data-tab="report"]').click();
+    toast('Report ready', 'success');
+  } catch (e) {
+    toast('Report generation failed: ' + e.message, 'error');
+  } finally {
+    hideLoader();
+  }
+}
+
+let lastReport = null;
+
+function renderReport(report) {
+  lastReport = report;
+  document.getElementById('report-empty').style.display = 'none';
+  document.getElementById('report-content').style.display = 'block';
+
+  const s = report.summary;
+  document.getElementById('summary-grid').innerHTML = `
+    <div class="summary-card"><div class="num">${s.total}</div><div class="lbl">Total</div></div>
+    <div class="summary-card s-pass"><div class="num">${s.pass}</div><div class="lbl">Pass</div></div>
+    <div class="summary-card s-monitor"><div class="num">${s.monitor}</div><div class="lbl">Monitor</div></div>
+    <div class="summary-card s-fail"><div class="num">${s.fail}</div><div class="lbl">Fail</div></div>
+  `;
+
+  const audio = document.getElementById('report-audio');
+  const noAudio = document.getElementById('no-audio');
+  if (report.audio_base64) {
+    audio.src = 'data:audio/mpeg;base64,' + report.audio_base64;
+    audio.style.display = 'block';
+    noAudio.style.display = 'none';
+  } else {
+    audio.style.display = 'none';
+    noAudio.style.display = 'block';
+  }
+
+  const tbody = document.getElementById('report-tbody');
+  tbody.innerHTML = '';
+  (report.results || []).forEach(r => {
+    const st = (r.status || '').toLowerCase();
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td><span class="status-dot ${st}"></span></td>
+      <td style="text-transform:capitalize;font-weight:600">${r.component || '—'}</td>
+      <td>${r.confidence != null ? Math.round(r.confidence * 100) + '%' : '—'}</td>
+      <td>${r.observation || '—'}</td>
+      <td>${r.recommended_action && r.recommended_action !== 'None' ? r.recommended_action : '—'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function downloadReport() {
+  if (!lastReport) return;
+  const blob = new Blob([lastReport.report_text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `CATalyze_Report_${currentMachine.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.txt`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ================================================================== */
+/*  Parts ID                                                          */
+/* ================================================================== */
+function initPartsID() {
+  const drop = document.getElementById('parts-drop');
+  const fileInput = document.getElementById('parts-file');
+  drop.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', handlePartsFile);
+}
+
+async function handlePartsFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  e.target.value = '';
+
+  const preview = document.getElementById('parts-preview');
+  const img = document.getElementById('parts-img');
+  img.src = URL.createObjectURL(file);
+  preview.style.display = 'block';
+
+  showLoader('Identifying part…');
+  const form = new FormData();
+  form.append('image', file);
+  try {
+    const resp = await fetch('/parts/identify', { method: 'POST', body: form });
+    if (!resp.ok) throw new Error(resp.statusText);
+    const data = await resp.json();
+    renderPartsCandidates(data);
+  } catch (err) {
+    toast('Part identification failed: ' + err.message, 'error');
+  } finally {
+    hideLoader();
+  }
+}
+
+function renderPartsCandidates(data) {
+  const container = document.getElementById('parts-result');
+  const candidates = data.candidates || [data];
+
+  container.innerHTML = candidates.map((c, i) => `
+    <div class="parts-candidate">
+      <div class="parts-rank">${c.rank || i + 1}</div>
+      <div class="parts-info">
+        <div class="pi-machine">${c.machine || 'Unknown'}</div>
+        <div class="pi-component">${c.component || 'Unknown'}</div>
+        <div class="pi-obs">${c.observation || ''}</div>
+        ${c.recommended_action && c.recommended_action !== 'None' ? `<div class="pi-obs" style="color:var(--monitor);margin-top:2px">→ ${c.recommended_action}</div>` : ''}
+        <div class="cert-bar"><div class="cert-bar-fill" style="width:${Math.round((c.fitment_certainty || c.confidence || 0) * 100)}%"></div></div>
+        <div style="font-size:.7rem;color:var(--text-dim);margin-top:3px">${Math.round((c.fitment_certainty || c.confidence || 0) * 100)}% certainty</div>
+      </div>
+    </div>
+  `).join('');
+}
+
+/* ================================================================== */
+/*  Analytics                                                         */
+/* ================================================================== */
+let donutChart = null;
+let barChart = null;
+let timelineChart = null;
+
+function _freshCanvas(id) {
+  const old = document.getElementById(id);
+  const parent = old.parentNode;
+  const canvas = document.createElement('canvas');
+  canvas.id = id;
+  if (old.style.maxHeight) canvas.style.maxHeight = old.style.maxHeight;
+  parent.replaceChild(canvas, old);
+  return canvas;
+}
+
+const LINE_COLORS = [
+  '#FFCD11','#22c55e','#3b82f6','#ef4444','#eab308','#a855f7',
+  '#ec4899','#14b8a6','#f97316','#6366f1','#84cc16','#06b6d4',
+];
+
+function statusToScore(s) {
+  s = (s || '').toUpperCase();
+  if (s === 'PASS') return 100;
+  if (s === 'MONITOR') return 50;
+  if (s === 'FAIL') return 0;
+  return null;
+}
+
+function renderAnalytics() {
+  const entries = Object.entries(results);
+  const empty = document.getElementById('analytics-empty');
+  const content = document.getElementById('analytics-content');
+
+  if (entries.length === 0) {
+    empty.style.display = 'block';
+    content.style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  content.style.display = 'block';
+
+  if (donutChart) { donutChart.destroy(); donutChart = null; }
+  if (barChart) { barChart.destroy(); barChart = null; }
+  if (timelineChart) { timelineChart.destroy(); timelineChart = null; }
+
+  let passCt = 0, monitorCt = 0, failCt = 0;
+  entries.forEach(([, r]) => {
+    const s = (r.status || '').toUpperCase();
+    if (s === 'PASS') passCt++;
+    else if (s === 'MONITOR') monitorCt++;
+    else if (s === 'FAIL') failCt++;
+  });
+
+  const totalPts = passCt * 100 + monitorCt * 50;
+  const healthPct = entries.length > 0 ? Math.round(totalPts / entries.length) : 0;
+  const scoreEl = document.getElementById('health-score');
+  scoreEl.textContent = healthPct + '%';
+  scoreEl.style.color = healthPct >= 80 ? 'var(--pass)' : healthPct >= 50 ? 'var(--monitor)' : 'var(--fail)';
+
+  const chartColors = { pass: '#22c55e', monitor: '#eab308', fail: '#ef4444' };
+
+  requestAnimationFrame(() => {
+    // Donut chart
+    const donutCanvas = _freshCanvas('donut-chart');
+    donutChart = new Chart(donutCanvas, {
+      type: 'doughnut',
+      data: {
+        labels: ['Pass', 'Monitor', 'Fail'],
+        datasets: [{
+          data: [passCt, monitorCt, failCt],
+          backgroundColor: [chartColors.pass, chartColors.monitor, chartColors.fail],
+          borderColor: '#1e1e1e',
+          borderWidth: 3,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true, cutout: '65%',
+        plugins: {
+          legend: { position: 'bottom', labels: { color: '#e0e0e0', padding: 16, font: { size: 12 } } },
+        },
+      },
+    });
+
+    // Bar chart
+    const compNames = entries.map(([c]) => c.length > 14 ? c.slice(0, 12) + '…' : c);
+    const colors = entries.map(([, r]) => {
+      const s = (r.status || '').toUpperCase();
+      return s === 'PASS' ? chartColors.pass : s === 'MONITOR' ? chartColors.monitor : chartColors.fail;
+    });
+    const vals = entries.map(([, r]) => Math.round((r.confidence || 0) * 100));
+
+    const barCanvas = _freshCanvas('bar-chart');
+    barChart = new Chart(barCanvas, {
+      type: 'bar',
+      data: {
+        labels: compNames,
+        datasets: [{ label: 'Confidence %', data: vals, backgroundColor: colors, borderRadius: 4, maxBarThickness: 32 }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: true, indexAxis: 'y',
+        scales: {
+          x: { min: 0, max: 100, ticks: { color: '#999', callback: v => v + '%' }, grid: { color: '#333' } },
+          y: { ticks: { color: '#e0e0e0', font: { size: 11 } }, grid: { display: false } },
+        },
+        plugins: { legend: { display: false } },
+      },
+    });
+
+    // Session timeline (current session data shown immediately)
+    renderSessionTimeline();
+
+    // Also fetch historical data from Supermemory in background
+    fetchAndRenderTimeline();
+  });
+}
+
+function renderSessionTimeline() {
+  if (inspectionOrder.length < 1) return;
+
+  const labels = inspectionOrder.map((_, i) => `#${i + 1}`);
+  const datasets = inspectionOrder.map((comp, ci) => ({
+    label: comp.length > 16 ? comp.slice(0, 14) + '…' : comp,
+    data: inspectionOrder.map(c => c === comp ? statusToScore(results[comp]?.status) : null),
+    borderColor: LINE_COLORS[ci % LINE_COLORS.length],
+    backgroundColor: LINE_COLORS[ci % LINE_COLORS.length],
+    tension: 0.3,
+    pointRadius: 5,
+    spanGaps: false,
+  }));
+
+  const tlCanvas = _freshCanvas('timeline-chart');
+  if (timelineChart) timelineChart.destroy();
+  timelineChart = new Chart(tlCanvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: _timelineOptions(),
+  });
+}
+
+async function fetchAndRenderTimeline() {
+  if (!currentMachine) return;
+  const inspectorId = getInspectorId();
+  const comps = Object.keys(results);
+  if (comps.length === 0) return;
+
+  const allRecords = {};
+  const fetches = comps.map(async comp => {
+    const qs = new URLSearchParams({ machine: currentMachine, component: comp, limit: '20' });
+    if (inspectorId) qs.set('inspector_id', inspectorId);
+    try {
+      const resp = await fetch('/history?' + qs);
+      if (!resp.ok) return;
+      const data = await resp.json();
+      if (data.records && data.records.length > 0) allRecords[comp] = data.records;
+    } catch { /* ignore */ }
+  });
+
+  await Promise.all(fetches);
+
+  const hasHistory = Object.values(allRecords).some(r => r.length > 0);
+  if (!hasHistory) return;
+
+  // Build unified time axis from all records + current session
+  const allDates = new Set();
+  Object.values(allRecords).forEach(recs => recs.forEach(r => {
+    if (r.date) allDates.add(r.date);
+  }));
+  const now = new Date().toISOString();
+  allDates.add(now);
+  const sortedDates = [...allDates].sort();
+
+  const labels = sortedDates.map(d => {
+    const dt = new Date(d);
+    return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  });
+
+  const datasets = comps.map((comp, ci) => {
+    const history = allRecords[comp] || [];
+    const dateMap = {};
+    history.forEach(r => { if (r.date) dateMap[r.date] = statusToScore(r.status); });
+    dateMap[now] = statusToScore(results[comp]?.status);
+
+    return {
+      label: comp.length > 16 ? comp.slice(0, 14) + '…' : comp,
+      data: sortedDates.map(d => dateMap[d] ?? null),
+      borderColor: LINE_COLORS[ci % LINE_COLORS.length],
+      backgroundColor: LINE_COLORS[ci % LINE_COLORS.length],
+      tension: 0.3,
+      pointRadius: 4,
+      spanGaps: true,
+    };
+  });
+
+  const tlCanvas = _freshCanvas('timeline-chart');
+  if (timelineChart) timelineChart.destroy();
+  timelineChart = new Chart(tlCanvas, {
+    type: 'line',
+    data: { labels, datasets },
+    options: _timelineOptions(),
+  });
+
+  document.getElementById('timeline-note').style.display = 'block';
+}
+
+function _timelineOptions() {
+  return {
+    responsive: true, maintainAspectRatio: true,
+    scales: {
+      y: {
+        min: 0, max: 100,
+        ticks: {
+          color: '#999', stepSize: 50,
+          callback: v => v === 100 ? 'PASS' : v === 50 ? 'MONITOR' : 'FAIL',
+        },
+        grid: { color: '#333' },
+      },
+      x: {
+        ticks: { color: '#e0e0e0', font: { size: 11 } },
+        grid: { color: '#2a2a2a' },
+      },
+    },
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: { color: '#e0e0e0', padding: 12, font: { size: 11 }, boxWidth: 12 },
+      },
+    },
+  };
+}
+
+/* ================================================================== */
+/*  Live Inspect                                                      */
+/* ================================================================== */
+let liveStream = null;
+let liveInterval = null;
+let liveInFlight = false;
+
+function initLive() {
+  document.getElementById('btn-start-live').addEventListener('click', startLive);
+  document.getElementById('btn-stop-live').addEventListener('click', stopLive);
+}
+
+async function startLive() {
+  const video = document.getElementById('live-video');
+  try {
+    liveStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'environment', width: { ideal: 1280 } }
+    });
+    video.srcObject = liveStream;
+  } catch {
+    toast('Camera access denied', 'error');
+    return;
+  }
+
+  document.getElementById('live-idle').style.display = 'none';
+  document.getElementById('live-active').style.display = 'block';
+  document.getElementById('live-pulse').style.display = 'flex';
+  document.getElementById('live-overlay').style.opacity = '0';
+  document.getElementById('live-comp').textContent = '—';
+  document.getElementById('live-badge').textContent = '—';
+  document.getElementById('live-badge').className = 'live-badge pending';
+  document.getElementById('live-obs').textContent = 'Waiting for first analysis…';
+
+  liveInterval = setInterval(captureLiveFrame, 3000);
+}
+
+function stopLive() {
+  if (liveInterval) { clearInterval(liveInterval); liveInterval = null; }
+  if (liveStream) {
+    liveStream.getTracks().forEach(t => t.stop());
+    liveStream = null;
+  }
+  const video = document.getElementById('live-video');
+  video.srcObject = null;
+  document.getElementById('live-idle').style.display = '';
+  document.getElementById('live-active').style.display = 'none';
+}
+
+async function captureLiveFrame() {
+  if (liveInFlight) return;
+  const video = document.getElementById('live-video');
+  if (!video.videoWidth) return;
+
+  const canvas = document.getElementById('live-canvas');
+  canvas.width = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext('2d').drawImage(video, 0, 0);
+
+  const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+  const base64 = dataUrl.split(',')[1];
+
+  liveInFlight = true;
+  try {
+    const resp = await fetch('/inspect/live', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image_base64: base64 }),
+    });
+    if (!resp.ok) throw new Error(resp.statusText);
+    const data = await resp.json();
+    updateLiveOverlay(data);
+  } catch (e) {
+    console.error('Live inspect error:', e);
+  } finally {
+    liveInFlight = false;
+  }
+}
+
+function updateLiveOverlay(data) {
+  const overlay = document.getElementById('live-overlay');
+  overlay.style.opacity = '1';
+
+  document.getElementById('live-comp').textContent = data.component || 'Unknown';
+
+  const badge = document.getElementById('live-badge');
+  const status = (data.status || 'UNKNOWN').toUpperCase();
+  const cls = status === 'PASS' ? 'pass' : status === 'MONITOR' ? 'monitor' : status === 'FAIL' ? 'fail' : 'pending';
+  badge.className = 'live-badge ' + cls;
+  badge.textContent = status;
+
+  document.getElementById('live-obs').textContent = data.observation || '';
+}
+
+/* ================================================================== */
+/*  Utilities                                                         */
+/* ================================================================== */
+function slugify(s) { return s.replace(/[^a-z0-9]+/gi, '-').toLowerCase(); }
+function esc(s) { return s.replace(/'/g, "\\'"); }
+
+function showLoader(msg) {
+  document.getElementById('loader-text').textContent = msg || 'Loading…';
+  document.getElementById('loader').classList.add('open');
+}
+function hideLoader() {
+  document.getElementById('loader').classList.remove('open');
+}
+
+function toast(msg, type = 'info') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+</script>
+</body>
+</html>
