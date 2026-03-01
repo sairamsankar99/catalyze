@@ -24,11 +24,6 @@ def _headers() -> dict[str, str]:
     }
 
 
-def _metadata_filter(key: str, value: str) -> dict[str, str]:
-    """Build a single metadata filter for v3 search."""
-    return {"filterType": "metadata", "key": key, "value": value}
-
-
 async def save_inspection_result(
     machine: str,
     component: str,
@@ -96,22 +91,10 @@ async def get_inspection_history(
         return []
 
     container_tag = inspector_id or "anonymous"
-    filters: dict[str, list[dict[str, str]]] = {
-        "AND": [
-            _metadata_filter("type", "inspection"),
-            _metadata_filter("machine", machine),
-            _metadata_filter("component", component),
-        ]
-    }
-    if inspector_id:
-        filters["AND"].append(_metadata_filter("inspector_id", inspector_id))
-
     payload = {
         "q": f"{machine} {component} inspection",
         "containerTag": container_tag,
-        "filters": filters,
         "limit": min(limit, 100),
-        "searchMode": "memories",
     }
 
     async with httpx.AsyncClient(timeout=15) as client:
@@ -126,7 +109,10 @@ async def get_inspection_history(
                 return []
 
             data = resp.json()
-            results = data.get("results") or []
+            results = data.get("results")
+            if not results and isinstance(data, list):
+                results = data
+            results = results or []
             records = []
             for r in results:
                 meta = r.get("metadata")
@@ -151,15 +137,7 @@ async def get_all_inspection_results(
     payload = {
         "q": "inspection",
         "containerTag": inspector_id,
-        "filters": {
-            "AND": [
-                _metadata_filter("type", "inspection"),
-                _metadata_filter("inspector_id", inspector_id),
-            ]
-        },
         "limit": min(limit, 100),
-        "searchMode": "memories",
-        "threshold": 0.0,
     }
 
     async with httpx.AsyncClient(timeout=15) as client:
@@ -174,7 +152,10 @@ async def get_all_inspection_results(
                 return []
 
             data = resp.json()
-            results = data.get("results") or []
+            results = data.get("results")
+            if not results and isinstance(data, list):
+                results = data
+            results = results or []
             records = []
             for r in results:
                 meta = r.get("metadata")
@@ -233,15 +214,7 @@ async def get_fleet(inspector_id: str) -> list[str]:
     payload = {
         "q": "fleet",
         "containerTag": inspector_id,
-        "filters": {
-            "AND": [
-                _metadata_filter("type", "fleet"),
-                _metadata_filter("inspector_id", inspector_id),
-            ]
-        },
-        "limit": 20,
-        "searchMode": "memories",
-        "threshold": 0.0,
+        "limit": 100,
     }
 
     async with httpx.AsyncClient(timeout=15) as client:
@@ -256,7 +229,10 @@ async def get_fleet(inspector_id: str) -> list[str]:
                 return []
 
             data = resp.json()
-            results = data.get("results") or []
+            results = data.get("results")
+            if not results and isinstance(data, list):
+                results = data
+            results = results or []
             best: dict[str, Any] | None = None
             for r in results:
                 meta = r.get("metadata")
