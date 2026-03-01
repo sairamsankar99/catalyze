@@ -2433,8 +2433,13 @@ function pushToInspectionCache(machine, component, data) {
     confidence: data.confidence,
     observation: data.observation || '',
   });
-  if (timelineChart && document.getElementById('tab-analytics').classList.contains('active'))
+  const analyticsTab = document.getElementById('tab-analytics');
+  if (timelineChart) {
     renderTimelineChart(analyticsMachine || currentMachine);
+  }
+  if (analyticsTab && analyticsTab.classList.contains('active')) {
+    renderAnalytics();
+  }
 }
 
 /* ================================================================== */
@@ -2571,75 +2576,290 @@ function renderReport(report) {
 
 async function downloadReportPDF() {
   if (!lastReport) return;
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF();
-  const pageW = doc.internal.pageSize.getWidth();
-  let y = 18;
-  doc.setFillColor(10, 11, 15);
-  doc.rect(0, 0, pageW, 32, 'F');
-  doc.setTextColor(255, 205, 17);
-  doc.setFontSize(20);
-  doc.text('CATalyze', 14, 22);
-  doc.setTextColor(232, 233, 237);
-  doc.setFontSize(10);
-  doc.text('Inspection Report', 14, 28);
-  y = 40;
-  doc.setTextColor(107, 110, 123);
-  doc.setFontSize(9);
-  doc.text('Inspector: ' + (getInspectorId() || '—'), 14, y);
-  y += 6;
-  doc.text('Machine: ' + (currentMachine || '—'), 14, y);
-  y += 6;
-  doc.text('Date: ' + new Date().toLocaleString(), 14, y);
-  y += 14;
-  const s = lastReport.summary || {};
-  doc.setFontSize(11);
-  doc.setTextColor(232, 233, 237);
-  doc.text('Summary — Pass: ' + (s.pass || 0) + '  Monitor: ' + (s.monitor || 0) + '  Fail: ' + (s.fail || 0), 14, y);
-  y += 12;
-  doc.setDrawColor(37, 40, 56);
-  doc.line(14, y, pageW - 14, y);
-  y += 10;
-  const rows = lastReport.results || [];
-  doc.setFontSize(9);
-  doc.setTextColor(107, 110, 123);
-  doc.text('Component', 14, y);
-  doc.text('Status', 60, y);
-  doc.text('Confidence', 90, y);
-  doc.text('Observation', 120, y);
-  y += 8;
-  doc.setDrawColor(37, 40, 56);
-  doc.line(14, y, pageW - 14, y);
-  y += 8;
-  rows.forEach(r => {
-    if (y > 270) { doc.addPage(); y = 20; }
-    doc.setTextColor(232, 233, 237);
-    doc.text((r.component || '—').slice(0, 20), 14, y);
-    const status = (r.status || '—').toUpperCase();
-    const [rr, gg, bb] = status === 'PASS' ? [34, 197, 94] : status === 'FAIL' ? [239, 68, 68] : [234, 179, 8];
-    doc.setTextColor(rr, gg, bb);
-    doc.text(status, 60, y);
-    doc.setTextColor(232, 233, 237);
-    doc.text((r.confidence != null ? Math.round(r.confidence * 100) + '%' : '—'), 90, y);
-    const obs = (r.observation || '—').slice(0, 55);
-    doc.setFontSize(8);
-    doc.text(obs, 120, y);
-    doc.setFontSize(9);
-    y += 6;
-    if (r.recommended_action && r.recommended_action !== 'None') {
-      doc.setTextColor(234, 179, 8);
-      doc.text('Action: ' + r.recommended_action.slice(0, 70), 14, y);
-      y += 6;
+  if (!window.jspdf || typeof html2canvas !== 'function') {
+    toast('PDF dependencies are not loaded', 'error');
+    return;
+  }
+
+  showLoader('Building professional PDF report…');
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const pageW = doc.internal.pageSize.getWidth();
+    const pageH = doc.internal.pageSize.getHeight();
+    const margin = 14;
+    const colors = {
+      bgDark: [10, 11, 15],
+      bgPanel: [18, 20, 28],
+      border: [37, 40, 56],
+      text: [232, 233, 237],
+      muted: [107, 110, 123],
+      cat: [255, 205, 17],
+      pass: [34, 197, 94],
+      monitor: [234, 179, 8],
+      fail: [239, 68, 68],
+    };
+    const rows = (lastReport.results && lastReport.results.length)
+      ? lastReport.results
+      : Object.entries(results).map(([component, r]) => ({ component, ...r }));
+    const summary = lastReport.summary || {};
+    const pass = Number(summary.pass || 0);
+    const monitor = Number(summary.monitor || 0);
+    const fail = Number(summary.fail || 0);
+    const scorable = pass + monitor + fail;
+    const healthPct = scorable ? Math.round(((pass * 100) + (monitor * 50)) / scorable) : 0;
+
+    function drawHeader(title, subtitle, pageNo) {
+      doc.setFillColor(colors.bgDark[0], colors.bgDark[1], colors.bgDark[2]);
+      doc.rect(0, 0, pageW, 30, 'F');
+      doc.setFillColor(colors.cat[0], colors.cat[1], colors.cat[2]);
+      doc.rect(0, 0, pageW, 4, 'F');
+      doc.setTextColor(colors.cat[0], colors.cat[1], colors.cat[2]);
+      doc.setFontSize(19);
+      doc.setFont(undefined, 'bold');
+      doc.text('CATalyze', margin, 16);
+      doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+      doc.setFontSize(11);
+      doc.setFont(undefined, 'normal');
+      doc.text(title, margin, 23);
+      if (subtitle) {
+        doc.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+        doc.setFontSize(9);
+        doc.text(subtitle, margin, 28);
+      }
+      doc.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      doc.setFontSize(8);
+      doc.text('Page ' + String(pageNo), pageW - margin, 28, { align: 'right' });
     }
-    (r.maintenance_steps || []).slice(0, 2).forEach(step => {
-      doc.setTextColor(107, 110, 123);
-      doc.text('• ' + String(step).slice(0, 80), 18, y);
-      y += 5;
+
+    function drawSectionHeader(y, label) {
+      doc.setFillColor(colors.bgPanel[0], colors.bgPanel[1], colors.bgPanel[2]);
+      doc.roundedRect(margin, y, pageW - (margin * 2), 10, 2, 2, 'F');
+      doc.setFillColor(colors.cat[0], colors.cat[1], colors.cat[2]);
+      doc.rect(margin, y, 2, 10, 'F');
+      doc.setTextColor(colors.cat[0], colors.cat[1], colors.cat[2]);
+      doc.setFontSize(10);
+      doc.setFont(undefined, 'bold');
+      doc.text(label, margin + 6, y + 6.8);
+      doc.setFont(undefined, 'normal');
+    }
+
+    function statusColor(status) {
+      const s = (status || '').toUpperCase();
+      if (s === 'PASS') return colors.pass;
+      if (s === 'MONITOR') return colors.monitor;
+      if (s === 'FAIL') return colors.fail;
+      return colors.muted;
+    }
+
+    /* ----------------------------- Page 1 ----------------------------- */
+    drawHeader('Equipment Inspection Report', 'Executive Summary', 1);
+    let y = 38;
+    drawSectionHeader(y, 'Inspection Metadata');
+    y += 14;
+
+    doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
+    doc.setFillColor(15, 17, 24);
+    doc.roundedRect(margin, y, pageW - (margin * 2), 48, 2, 2, 'FD');
+
+    const meta = [
+      ['Inspector', getInspectorId() || '—'],
+      ['Date', new Date().toLocaleString()],
+      ['Machine', currentMachine || '—'],
+      ['Total Components', String(rows.length)],
+    ];
+    let my = y + 10;
+    meta.forEach(([k, v]) => {
+      doc.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+      doc.setFontSize(9);
+      doc.text(k + ':', margin + 8, my);
+      doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+      doc.setFontSize(10);
+      doc.text(String(v), margin + 40, my);
+      my += 10;
     });
-    y += 4;
-  });
-  doc.save('CATalyze_Report_' + (currentMachine || 'Inspection').replace(/\s+/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.pdf');
-  toast('PDF downloaded', 'success');
+
+    const gaugeX = pageW - margin - 44;
+    const gaugeY = y + 24;
+    doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
+    doc.setFillColor(20, 22, 31);
+    doc.circle(gaugeX, gaugeY, 16, 'FD');
+    const ringColor = healthPct >= 80 ? colors.pass : healthPct >= 50 ? colors.monitor : colors.fail;
+    doc.setDrawColor(ringColor[0], ringColor[1], ringColor[2]);
+    doc.setLineWidth(2.5);
+    doc.circle(gaugeX, gaugeY, 16);
+    doc.setTextColor(ringColor[0], ringColor[1], ringColor[2]);
+    doc.setFont(undefined, 'bold');
+    doc.setFontSize(11);
+    doc.text(healthPct + '%', gaugeX, gaugeY + 1.2, { align: 'center' });
+    doc.setFont(undefined, 'normal');
+    doc.setTextColor(colors.muted[0], colors.muted[1], colors.muted[2]);
+    doc.setFontSize(8);
+    doc.text('Overall Health', gaugeX, gaugeY + 22, { align: 'center' });
+
+    y += 58;
+    drawSectionHeader(y, 'Status Distribution');
+    y += 14;
+
+    const pills = [
+      { label: 'PASS', val: pass, color: colors.pass },
+      { label: 'MONITOR', val: monitor, color: colors.monitor },
+      { label: 'FAIL', val: fail, color: colors.fail },
+    ];
+    let px = margin;
+    pills.forEach(item => {
+      doc.setFillColor(15, 17, 24);
+      doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
+      doc.roundedRect(px, y, 56, 22, 2, 2, 'FD');
+      doc.setFillColor(item.color[0], item.color[1], item.color[2]);
+      doc.rect(px, y, 2, 22, 'F');
+      doc.setTextColor(item.color[0], item.color[1], item.color[2]);
+      doc.setFontSize(9);
+      doc.text(item.label, px + 6, y + 8);
+      doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(14);
+      doc.text(String(item.val), px + 6, y + 17);
+      doc.setFont(undefined, 'normal');
+      px += 60;
+    });
+
+    /* ----------------------------- Page 2 ----------------------------- */
+    doc.addPage();
+    drawHeader('Analytics Snapshot', 'Captured from live analytics dashboard', 2);
+    drawSectionHeader(38, 'Charts, Gauges, and Timeline');
+
+    const activeBtn = document.querySelector('.tab-btn.active');
+    const activePanel = document.querySelector('.tab-panel.active');
+    const analyticsBtn = document.querySelector('.tab-btn[data-tab="analytics"]');
+    const analyticsPanel = document.getElementById('tab-analytics');
+
+    if (!analyticsPanel) throw new Error('Analytics tab not found');
+    if (analyticsBtn) analyticsBtn.click();
+    renderAnalytics();
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    const analyticsCanvas = await html2canvas(analyticsPanel, {
+      backgroundColor: '#0A0B0F',
+      scale: 2,
+      useCORS: true,
+      allowTaint: false,
+      logging: false,
+      windowWidth: Math.max(analyticsPanel.scrollWidth, analyticsPanel.clientWidth),
+      windowHeight: Math.max(analyticsPanel.scrollHeight, analyticsPanel.clientHeight),
+    });
+    const imgData = analyticsCanvas.toDataURL('image/png');
+    const maxW = pageW - (margin * 2);
+    const maxH = pageH - 60;
+    const ratio = analyticsCanvas.width / analyticsCanvas.height;
+    let imgW = maxW;
+    let imgH = imgW / ratio;
+    if (imgH > maxH) {
+      imgH = maxH;
+      imgW = imgH * ratio;
+    }
+    const imgX = (pageW - imgW) / 2;
+    const imgY = 52;
+    doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
+    doc.setFillColor(15, 17, 24);
+    doc.roundedRect(imgX - 1.5, imgY - 1.5, imgW + 3, imgH + 3, 2, 2, 'FD');
+    doc.addImage(imgData, 'PNG', imgX, imgY, imgW, imgH, undefined, 'FAST');
+
+    if (activeBtn && activeBtn.dataset.tab !== 'analytics') activeBtn.click();
+    else if (activePanel && activePanel.id !== 'tab-analytics') {
+      const activePanelId = activePanel.id.replace(/^tab-/, '');
+      const previousBtn = document.querySelector('.tab-btn[data-tab="' + activePanelId + '"]');
+      if (previousBtn) previousBtn.click();
+    }
+
+    /* ----------------------------- Page 3 ----------------------------- */
+    doc.addPage();
+    drawHeader('Detailed Component Findings', 'Status, confidence, observations, and maintenance steps', 3);
+    drawSectionHeader(38, 'Component-by-Component Table');
+    y = 52;
+
+    const cols = [
+      { key: 'component', label: 'Component', width: 34 },
+      { key: 'status', label: 'Status', width: 20 },
+      { key: 'confidence', label: 'Confidence', width: 18 },
+      { key: 'observation', label: 'Observation', width: 56 },
+      { key: 'maintenance_steps', label: 'Maintenance Steps', width: 44 },
+    ];
+    const tableW = cols.reduce((sum, c) => sum + c.width, 0);
+    let x = margin;
+    doc.setFillColor(colors.cat[0], colors.cat[1], colors.cat[2]);
+    doc.rect(margin, y, tableW, 9, 'F');
+    doc.setTextColor(0, 0, 0);
+    doc.setFontSize(8.5);
+    doc.setFont(undefined, 'bold');
+    cols.forEach(c => {
+      doc.text(c.label, x + 1.5, y + 6);
+      x += c.width;
+    });
+    doc.setFont(undefined, 'normal');
+    y += 9;
+
+    rows.forEach(row => {
+      const confidence = row.confidence != null ? Math.round(Number(row.confidence || 0) * 100) + '%' : '—';
+      const stepsText = Array.isArray(row.maintenance_steps)
+        ? row.maintenance_steps.map(s => '- ' + String(s)).join('\n')
+        : (row.maintenance_steps || row.recommended_action || '—');
+      const rowCells = [
+        String(row.component || '—'),
+        String((row.status || '—').toUpperCase()),
+        confidence,
+        String(row.observation || '—'),
+        String(stepsText || '—'),
+      ];
+      const wrapped = rowCells.map((txt, i) => doc.splitTextToSize(txt, cols[i].width - 3));
+      const rowH = Math.max(8, ...wrapped.map(lines => (lines.length * 4.2) + 2.2));
+
+      if (y + rowH > pageH - margin) {
+        doc.addPage();
+        drawHeader('Detailed Component Findings', 'Continued', doc.internal.getNumberOfPages());
+        drawSectionHeader(38, 'Component-by-Component Table');
+        y = 52;
+        let hx = margin;
+        doc.setFillColor(colors.cat[0], colors.cat[1], colors.cat[2]);
+        doc.rect(margin, y, tableW, 9, 'F');
+        doc.setTextColor(0, 0, 0);
+        doc.setFont(undefined, 'bold');
+        cols.forEach(c => {
+          doc.text(c.label, hx + 1.5, y + 6);
+          hx += c.width;
+        });
+        doc.setFont(undefined, 'normal');
+        y += 9;
+      }
+
+      doc.setFillColor(15, 17, 24);
+      doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
+      doc.rect(margin, y, tableW, rowH, 'FD');
+      x = margin;
+      cols.forEach((c, i) => {
+        doc.setDrawColor(colors.border[0], colors.border[1], colors.border[2]);
+        doc.rect(x, y, c.width, rowH);
+        if (c.key === 'status') {
+          const sc = statusColor(row.status);
+          doc.setTextColor(sc[0], sc[1], sc[2]);
+        } else {
+          doc.setTextColor(colors.text[0], colors.text[1], colors.text[2]);
+        }
+        doc.setFontSize(8);
+        doc.text(wrapped[i], x + 1.5, y + 4.8);
+        x += c.width;
+      });
+      y += rowH;
+    });
+
+    const file = 'CATalyze_Report_' + (currentMachine || 'Inspection').replace(/\s+/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.pdf';
+    doc.save(file);
+    toast('Professional PDF downloaded', 'success');
+  } catch (err) {
+    toast('PDF generation failed: ' + err.message, 'error');
+  } finally {
+    hideLoader();
+  }
 }
 
 function downloadReportCSV() {
@@ -2754,7 +2974,8 @@ function statusToScore(s) {
   if (s === 'PASS') return 100;
   if (s === 'MONITOR') return 50;
   if (s === 'FAIL') return 0;
-  return null;
+  if (s === 'INVALID') return 0;
+  return 0;
 }
 
 function getResultsForMachine(machineName) {
@@ -2799,17 +3020,30 @@ function renderAnalytics() {
   const empty = document.getElementById('analytics-empty');
   const content = document.getElementById('analytics-content');
 
+  if (donutChart) { donutChart.destroy(); donutChart = null; }
+  if (barChart) { barChart.destroy(); barChart = null; }
+  if (timelineChart) { timelineChart.destroy(); timelineChart = null; }
+
   if (entries.length === 0) {
-    empty.style.display = 'block';
-    content.style.display = 'none';
+    empty.style.display = 'none';
+    content.style.display = 'block';
+    document.getElementById('an-total').textContent = '0';
+    document.getElementById('an-pass-rate').textContent = '0%';
+    document.getElementById('an-progress').textContent = '0%';
+    const scoreEl = document.getElementById('health-score');
+    scoreEl.textContent = '0%';
+    scoreEl.style.color = 'var(--monitor)';
+    const ringEl = document.getElementById('health-ring-fg');
+    const circumference = 2 * Math.PI * 60;
+    ringEl.style.stroke = '#eab308';
+    ringEl.style.strokeDashoffset = circumference;
+    const compSelect = document.getElementById('timeline-component-select');
+    if (compSelect) compSelect.innerHTML = '<option value="">All Components</option>';
+    if (machine) renderTimelineChart(machine);
     return;
   }
   empty.style.display = 'none';
   content.style.display = 'block';
-
-  if (donutChart) { donutChart.destroy(); donutChart = null; }
-  if (barChart) { barChart.destroy(); barChart = null; }
-  if (timelineChart) { timelineChart.destroy(); timelineChart = null; }
 
   let passCt = 0, monitorCt = 0, failCt = 0, invalidCt = 0;
   entries.forEach(([, r]) => {
@@ -2913,6 +3147,7 @@ function renderAnalytics() {
 
 function formatTimelineLabel(iso) {
   const d = new Date(iso);
+  if (isNaN(d.getTime())) return 'Unknown time';
   const m = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   const h = String(d.getHours()).padStart(2, '0');
@@ -2926,10 +3161,22 @@ function renderTimelineChart(machineOverride) {
 
   let list = inspectionTimelineList.filter(r => (r.machine || '') === machine);
   if (timelineComponentFilter) list = list.filter(r => (r.component || '') === timelineComponentFilter);
-  list = list.slice().sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
-  if (list.length < 1) return;
+  list = list.slice().sort((a, b) => ((a.timestamp || a.date || '').localeCompare(b.timestamp || b.date || '')));
+  const timelineNote = document.getElementById('timeline-note');
+  let usingFallbackPoint = false;
+  if (list.length < 1) {
+    usingFallbackPoint = true;
+    list = [{
+      machine,
+      component: timelineComponentFilter || 'Sample Component',
+      timestamp: new Date().toISOString(),
+      status: 'MONITOR',
+      confidence: 0,
+      observation: 'No inspection history yet - sample baseline point',
+    }];
+  }
 
-  const labels = list.map(r => formatTimelineLabel(r.timestamp));
+  const labels = list.map(r => formatTimelineLabel(r.timestamp || r.date || new Date().toISOString()));
   const dataPoints = list.map(r => ({
     y: statusToScore(r.status),
     _raw: r,
@@ -2956,7 +3203,12 @@ function renderTimelineChart(machineOverride) {
     },
     options: _timelineOptions(),
   });
-  document.getElementById('timeline-note').style.display = 'block';
+  if (timelineNote) {
+    timelineNote.style.display = 'block';
+    timelineNote.textContent = usingFallbackPoint
+      ? 'No historical inspections yet - showing baseline sample point.'
+      : 'Showing historical data from past sessions.';
+  }
 }
 
 function _timelineOptions() {
