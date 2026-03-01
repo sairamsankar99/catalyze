@@ -1,9 +1,9 @@
 """
 CATalyze Supermemory integration — store and retrieve inspection history.
 
-Uses the Supermemory API (v4) at https://api.supermemory.ai to persist
+Uses the Supermemory API (v3) at https://api.supermemory.ai to persist
 inspection records per inspector. Save stores full result with metadata;
-search returns memories filtered by inspector_id (and optionally machine/component).
+search returns documents filtered by inspector_id (and optionally machine/component).
 """
 
 import os
@@ -25,7 +25,7 @@ def _headers() -> dict[str, str]:
 
 
 def _metadata_filter(key: str, value: str) -> dict[str, str]:
-    """Build a single metadata filter for v4 search."""
+    """Build a single metadata filter for v3 search."""
     return {"filterType": "metadata", "key": key, "value": value}
 
 
@@ -63,20 +63,15 @@ async def save_inspection_result(
         metadata["inspector_id"] = inspector_id
 
     payload = {
+        "content": content[:10000],
         "containerTag": container_tag,
-        "memories": [
-            {
-                "content": content[:10000],
-                "metadata": metadata,
-                "isStatic": False,
-            }
-        ],
+        "metadata": metadata,
     }
 
     async with httpx.AsyncClient(timeout=15) as client:
         try:
             resp = await client.post(
-                f"{SUPERMEMORY_BASE_URL}/v4/memories",
+                f"{SUPERMEMORY_BASE_URL}/v3/documents",
                 headers=_headers(),
                 json=payload,
             )
@@ -122,7 +117,7 @@ async def get_inspection_history(
     async with httpx.AsyncClient(timeout=15) as client:
         try:
             resp = await client.post(
-                f"{SUPERMEMORY_BASE_URL}/v4/search",
+                f"{SUPERMEMORY_BASE_URL}/v3/search",
                 headers=_headers(),
                 json=payload,
             )
@@ -170,7 +165,7 @@ async def get_all_inspection_results(
     async with httpx.AsyncClient(timeout=15) as client:
         try:
             resp = await client.post(
-                f"{SUPERMEMORY_BASE_URL}/v4/search",
+                f"{SUPERMEMORY_BASE_URL}/v3/search",
                 headers=_headers(),
                 json=payload,
             )
@@ -208,20 +203,15 @@ async def save_fleet(inspector_id: str, machine_names: list[str]) -> bool:
     }
 
     payload = {
+        "content": content[:10000],
         "containerTag": inspector_id,
-        "memories": [
-            {
-                "content": content[:10000],
-                "metadata": metadata,
-                "isStatic": False,
-            }
-        ],
+        "metadata": metadata,
     }
 
     async with httpx.AsyncClient(timeout=15) as client:
         try:
             resp = await client.post(
-                f"{SUPERMEMORY_BASE_URL}/v4/memories",
+                f"{SUPERMEMORY_BASE_URL}/v3/documents",
                 headers=_headers(),
                 json=payload,
             )
@@ -257,7 +247,7 @@ async def get_fleet(inspector_id: str) -> list[str]:
     async with httpx.AsyncClient(timeout=15) as client:
         try:
             resp = await client.post(
-                f"{SUPERMEMORY_BASE_URL}/v4/search",
+                f"{SUPERMEMORY_BASE_URL}/v3/search",
                 headers=_headers(),
                 json=payload,
             )
