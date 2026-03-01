@@ -1470,6 +1470,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   initPwToggles();
   initTabs();
   initStatsCounters();
+  initSignIn();
+  initLandingParticles();
   await loadMachines();
   loadFleetFromStorage();
   renderFleetSection();
@@ -1478,8 +1480,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('machine-selector-block').style.display = 'block';
     renderMachineGrid();
   });
-  initSignIn();
-  initLandingParticles();
   initCamera();
   initPartsID();
   initLive();
@@ -1696,8 +1696,10 @@ function initSignIn() {
     showApp();
   }
 
-  document.getElementById('lp-signin-btn').addEventListener('click', (e) => { e.preventDefault(); openAuth('login'); });
-  document.getElementById('lp-get-started').addEventListener('click', () => openAuth('register'));
+  const lpSignIn = document.getElementById('lp-signin-btn');
+  if (lpSignIn) lpSignIn.addEventListener('click', (e) => { e.preventDefault(); openAuth('login'); });
+  const lpGetStarted = document.getElementById('lp-get-started');
+  if (lpGetStarted) lpGetStarted.addEventListener('click', (e) => { e.preventDefault(); openAuth('register'); });
   document.getElementById('show-signup').addEventListener('click', () => openAuth('register'));
   document.getElementById('show-signin').addEventListener('click', () => openAuth('login'));
   document.getElementById('show-forgot').addEventListener('click', () => openAuth('forgot'));
