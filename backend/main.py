@@ -26,7 +26,9 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-load_dotenv()
+# Load .env from project root so ELEVENLABS_API_KEY etc. are found regardless of cwd
+_project_root = Path(__file__).resolve().parent.parent
+load_dotenv(_project_root / ".env")
 
 from backend.modal_functions import analyze_image, analyze_live, analyze_voice, identify_part
 from backend.supermemory import (
@@ -653,10 +655,16 @@ async def generate_report(req: ReportRequest):
     monitor_ct = sum(1 for r in req.results if r.get("status") == "MONITOR")
     fail_ct = sum(1 for r in req.results if r.get("status") == "FAIL")
 
+    api_key = os.environ.get("ELEVENLABS_API_KEY")
     audio_bytes = await _elevenlabs_tts(voice_summary)
     audio_base64 = (
         base64.b64encode(audio_bytes).decode() if audio_bytes else None
     )
+    audio_unavailable_reason: str | None = None
+    if not audio_base64:
+        audio_unavailable_reason = (
+            "elevenlabs_not_configured" if not api_key else "tts_failed"
+        )
 
     return {
         "report_text": report_text,
@@ -670,6 +678,7 @@ async def generate_report(req: ReportRequest):
         },
         "results": req.results,
         "audio_base64": audio_base64,
+        "audio_unavailable_reason": audio_unavailable_reason,
     }
 
 

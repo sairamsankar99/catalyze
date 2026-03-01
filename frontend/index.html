@@ -1092,7 +1092,7 @@ input,select,textarea{font-family:inherit}
       <h3>Voice Summary</h3>
       <audio id="report-audio" class="audio-player" controls></audio>
       <p id="no-audio" style="font-size:.78rem;color:var(--text-dim);margin-top:6px;display:none">
-        Audio unavailable — ElevenLabs API key not configured.
+        Voice summary unavailable.
       </p>
     </div>
 
@@ -2556,6 +2556,10 @@ function renderReport(report) {
   } else {
     audio.style.display = 'none';
     noAudio.style.display = 'block';
+    const reason = report.audio_unavailable_reason;
+    noAudio.textContent = reason === 'elevenlabs_not_configured'
+      ? 'Voice summary unavailable — set ELEVENLABS_API_KEY in the server environment to enable.'
+      : 'Voice summary unavailable.';
   }
 
   const tbody = document.getElementById('report-tbody');
