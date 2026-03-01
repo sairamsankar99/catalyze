@@ -386,21 +386,14 @@ input,select,textarea{font-family:inherit}
 .lp-tl-step h3{font-size:.95rem;font-weight:700;margin-bottom:6px}
 .lp-tl-step p{font-size:.82rem;color:var(--text-dim);line-height:1.5}
 
-/* Testimonials */
-.lp-testimonials{display:grid;grid-template-columns:repeat(3,1fr);gap:20px}
-.lp-testimonial{background:var(--surface);border:1px solid var(--surface3);border-radius:var(--radius-lg);
-  padding:28px 24px;box-shadow:var(--shadow);transition:all .3s ease;position:relative}
-.lp-testimonial:hover{transform:translateY(-3px);box-shadow:var(--shadow-lg)}
-.lp-testimonial .lp-quote{font-size:.88rem;color:var(--text);line-height:1.6;margin-bottom:20px;
-  font-style:italic}
-.lp-testimonial .lp-quote::before{content:'"';font-size:2.5rem;font-weight:900;color:var(--cat);
-  line-height:.5;display:block;margin-bottom:8px;opacity:.6}
-.lp-testimonial-author{display:flex;align-items:center;gap:12px}
-.lp-testimonial-avatar{width:40px;height:40px;border-radius:50%;background:var(--cat);color:#000;
-  font-weight:800;font-size:.8rem;display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.lp-testimonial-info{font-size:.8rem}
-.lp-testimonial-info strong{display:block;color:var(--text);font-weight:700}
-.lp-testimonial-info span{color:var(--text-dim)}
+/* Equipment grid */
+.lp-equipment{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.lp-equip-card{background:var(--surface);border:1px solid var(--surface3);border-radius:var(--radius-lg);
+  padding:24px 20px;transition:all .3s ease;box-shadow:var(--shadow)}
+.lp-equip-card:hover{border-color:var(--cat);transform:translateY(-4px);box-shadow:var(--shadow-lg)}
+.lp-equip-card .eq-icon{font-size:1.8rem;margin-bottom:10px;display:block}
+.lp-equip-card h4{font-size:.9rem;font-weight:700;margin-bottom:6px}
+.lp-equip-card p{font-size:.78rem;color:var(--text-dim);line-height:1.5}
 
 /* Footer */
 .lp-footer{border-top:1px solid var(--surface3);padding:48px 24px 32px}
@@ -455,7 +448,7 @@ input,select,textarea{font-family:inherit}
 
 @media(max-width:768px){
   .lp-features{grid-template-columns:1fr}
-  .lp-testimonials{grid-template-columns:1fr}
+  .lp-equipment{grid-template-columns:repeat(2,1fr)}
   .lp-footer-inner{grid-template-columns:1fr 1fr;gap:24px}
   .lp-timeline{flex-direction:column;gap:24px;align-items:center}
   .lp-timeline::before{display:none}
@@ -466,6 +459,7 @@ input,select,textarea{font-family:inherit}
   .lp-stats-bar{grid-template-columns:1fr;margin-top:-20px}
   .lp-stat:not(:last-child)::after{display:none}
   .lp-stat{padding:16px}
+  .lp-equipment{grid-template-columns:1fr}
   .lp-footer-inner{grid-template-columns:1fr}
 }
 
@@ -585,7 +579,7 @@ input,select,textarea{font-family:inherit}
     <div class="lp-nav-links">
       <a href="#lp-features">Features</a>
       <a href="#lp-how">How It Works</a>
-      <a href="#lp-testimonials">Testimonials</a>
+      <a href="#lp-equipment">Equipment</a>
       <a href="#" class="lp-signin-btn" id="lp-signin-btn">Sign In</a>
     </div>
   </nav>
@@ -671,40 +665,50 @@ input,select,textarea{font-family:inherit}
     </div>
   </section>
 
-  <!-- Testimonials -->
-  <section class="lp-section" id="lp-testimonials">
-    <h2 class="lp-section-title">Trusted by <span>Field Engineers</span></h2>
-    <p class="lp-section-sub">Hear from the inspectors who use CATalyze every day on the job site.</p>
-    <div class="lp-testimonials">
-      <div class="lp-testimonial">
-        <p class="lp-quote">CATalyze cut our walkaround inspection time in half. The AI catches things I might miss at the end of a long shift. It's become essential to our daily routine.</p>
-        <div class="lp-testimonial-author">
-          <div class="lp-testimonial-avatar">MR</div>
-          <div class="lp-testimonial-info">
-            <strong>Mike Rodriguez</strong>
-            <span>Senior Field Inspector, West Region</span>
-          </div>
-        </div>
+  <!-- Supported Equipment -->
+  <section class="lp-section" id="lp-equipment">
+    <h2 class="lp-section-title">Supported <span>Equipment</span></h2>
+    <p class="lp-section-sub">CATalyze covers 8 Caterpillar machine models with 50+ inspectable components across every category.</p>
+    <div class="lp-equipment">
+      <div class="lp-equip-card">
+        <span class="eq-icon">🏗️</span>
+        <h4>Cat 950 Wheel Loader</h4>
+        <p>Bucket, cutting edge, lift arms, cylinders, tires, hydraulics, engine, brakes &amp; steering.</p>
       </div>
-      <div class="lp-testimonial">
-        <p class="lp-quote">The voice inspection feature is a game changer. I can narrate what I see while keeping both hands on the machine. Reports are ready before I leave the site.</p>
-        <div class="lp-testimonial-author">
-          <div class="lp-testimonial-avatar">SK</div>
-          <div class="lp-testimonial-info">
-            <strong>Sarah Kim</strong>
-            <span>Equipment Manager, Pacific Northwest</span>
-          </div>
-        </div>
+      <div class="lp-equip-card">
+        <span class="eq-icon">⛏️</span>
+        <h4>Cat 320 Excavator</h4>
+        <p>Boom, stick, bucket, tracks, rollers, sprockets, swing bearing, hydraulics &amp; engine.</p>
       </div>
-      <div class="lp-testimonial">
-        <p class="lp-quote">We went from paper checklists to AI-powered inspections in one day. The analytics dashboard alone has prevented two major failures by catching early warning signs.</p>
-        <div class="lp-testimonial-author">
-          <div class="lp-testimonial-avatar">JD</div>
-          <div class="lp-testimonial-info">
-            <strong>James Donovan</strong>
-            <span>Fleet Maintenance Lead, Southeast Division</span>
-          </div>
-        </div>
+      <div class="lp-equip-card">
+        <span class="eq-icon">🚛</span>
+        <h4>Cat 740 Articulated Truck</h4>
+        <p>Dump body, tailgate, articulation joint, tires, suspension, driveshaft &amp; exhaust system.</p>
+      </div>
+      <div class="lp-equip-card">
+        <span class="eq-icon">🚜</span>
+        <h4>Cat D6 Dozer</h4>
+        <p>Blade, cutting edge, push arms, tracks, ripper, final drives, hydraulics &amp; engine.</p>
+      </div>
+      <div class="lp-equip-card">
+        <span class="eq-icon">🔩</span>
+        <h4>Cat 308 Mini Excavator</h4>
+        <p>Boom, stick, bucket, tracks, swing bearing, dozer blade, thumb attachment &amp; quick coupler.</p>
+      </div>
+      <div class="lp-equip-card">
+        <span class="eq-icon">🔧</span>
+        <h4>Cat 420 Backhoe Loader</h4>
+        <p>Front loader, backhoe boom &amp; stick, stabilizer legs, tires, hydraulics, brakes &amp; steering.</p>
+      </div>
+      <div class="lp-equip-card">
+        <span class="eq-icon">🏗️</span>
+        <h4>Cat 980 Wheel Loader</h4>
+        <p>Bucket, Z-bar linkage, lift arms, tires, transmission, driveshaft, hydraulics &amp; engine.</p>
+      </div>
+      <div class="lp-equip-card">
+        <span class="eq-icon">🚛</span>
+        <h4>Cat 745 Articulated Truck</h4>
+        <p>Dump body, liners, tailgate, articulation joint, tires, differential, suspension &amp; exhaust.</p>
       </div>
     </div>
   </section>
@@ -720,7 +724,7 @@ input,select,textarea{font-family:inherit}
         <h5>Product</h5>
         <a href="#lp-features">Features</a>
         <a href="#lp-how">How It Works</a>
-        <a href="#lp-testimonials">Testimonials</a>
+        <a href="#lp-equipment">Equipment</a>
       </div>
       <div class="lp-footer-col">
         <h5>Resources</h5>
@@ -1652,18 +1656,24 @@ function updateComponentUI(comp, data) {
   const status = (data.status || 'UNKNOWN').toUpperCase();
   const cls = status === 'PASS' ? 'pass' : status === 'MONITOR' ? 'monitor' : status === 'FAIL' ? 'fail' : status === 'INVALID' ? 'invalid' : 'pending';
   badge.className = 'badge ' + cls;
-  badge.textContent = status + (data.confidence != null ? ` ${Math.round(data.confidence * 100)}%` : '');
-  obs.textContent = data.observation || '';
-  act.textContent = status !== 'PASS' && data.recommended_action ? '→ ' + data.recommended_action : '';
 
-  if (stepsEl) {
-    stepsEl.innerHTML = '';
-    const steps = data.maintenance_steps || [];
-    steps.forEach(step => {
-      const li = document.createElement('li');
-      li.textContent = step;
-      stepsEl.appendChild(li);
-    });
+  if (status === 'INVALID') {
+    badge.textContent = 'INVALID';
+    obs.textContent = 'Image does not match the selected component. Please try again.';
+    act.textContent = '';
+    if (stepsEl) stepsEl.innerHTML = '';
+  } else {
+    badge.textContent = status + (data.confidence != null ? ` ${Math.round(data.confidence * 100)}%` : '');
+    obs.textContent = data.observation || '';
+    act.textContent = status !== 'PASS' && data.recommended_action ? '→ ' + data.recommended_action : '';
+    if (stepsEl) {
+      stepsEl.innerHTML = '';
+      (data.maintenance_steps || []).forEach(step => {
+        const li = document.createElement('li');
+        li.textContent = step;
+        stepsEl.appendChild(li);
+      });
+    }
   }
 
   const timeEl = document.getElementById('time-' + s);
