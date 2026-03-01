@@ -698,6 +698,17 @@ async def inspect_live(req: LiveRequest):
 # ---- Debug -----------------------------------------------------------------
 
 
+@app.get("/debug/envcheck")
+async def debug_envcheck():
+    """Return whether key env vars are set (and a safe prefix of Supermemory key)."""
+    sm_key = os.getenv("SUPERMEMORY_API_KEY", "")
+    return {
+        "supermemory_key_set": bool(sm_key),
+        "supermemory_key_prefix": sm_key[:8],
+        "openai_key_set": bool(os.getenv("OPENAI_API_KEY")),
+    }
+
+
 @app.get("/debug/supermemory")
 async def debug_supermemory():
     """
