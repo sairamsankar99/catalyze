@@ -9,6 +9,8 @@
 <title>CATalyze — Field Inspection</title>
 <link rel="manifest" href="/static/manifest.json">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <style>
 /* ------------------------------------------------------------------ */
 /*  Reset & base                                                      */
@@ -40,7 +42,10 @@ input,select,textarea{font-family:inherit}
 /* ------------------------------------------------------------------ */
 .app-bar{position:sticky;top:0;z-index:100;display:flex;align-items:center;
   gap:10px;padding:12px 24px;user-select:none;
-  background:linear-gradient(135deg,#14162080,#1a1d2a 50%,#14162080);
+  background:linear-gradient(135deg,#0d0e14 0%,#1a1d2a 30%,#252838 50%,#1a1d2a 70%,#0d0e14 100%);
+  background-image:radial-gradient(ellipse 120% 80% at 50% -20%,rgba(255,205,17,.12),transparent),
+    radial-gradient(ellipse 80% 50% at 80% 50%,rgba(255,205,17,.06),transparent),
+    linear-gradient(135deg,#0d0e14,#1a1d2a 50%,#0d0e14);
   border-bottom:1px solid var(--border);
   backdrop-filter:blur(16px);box-shadow:0 4px 24px rgba(0,0,0,.5)}
 .app-bar h1{font-size:1.4rem;font-weight:900;letter-spacing:.6px;display:flex;align-items:center;gap:6px}
@@ -91,27 +96,36 @@ input,select,textarea{font-family:inherit}
 
 .app-content{flex:1;min-width:0;overflow-y:auto}
 .tab-panel{display:none;padding:24px;max-width:960px;margin:0 auto;
-  animation:fadeIn .35s ease}
-.tab-panel.active{display:block}
+  animation:fadeIn .4s ease;opacity:0}
+.tab-panel.active{display:block;animation:tabIn .4s ease forwards}
 @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@keyframes tabIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 
 /* ------------------------------------------------------------------ */
 /*  Welcome banner                                                    */
 /* ------------------------------------------------------------------ */
-.welcome-banner{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+.welcome-banner{background:rgba(18,20,28,.7);border:1px solid var(--border);border-radius:var(--radius-lg);
   padding:28px 28px;margin-bottom:24px;display:flex;align-items:center;gap:24px;
   background-image:linear-gradient(135deg,rgba(255,205,17,.03),transparent 60%);
-  position:relative;overflow:hidden}
+  position:relative;overflow:hidden;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
 .welcome-banner::before{content:'';position:absolute;top:-40px;right:-40px;width:160px;height:160px;
   background:radial-gradient(circle,rgba(255,205,17,.06),transparent 70%);pointer-events:none}
 .welcome-left{flex:1}
 .welcome-left h2{font-size:1.3rem;font-weight:800;margin-bottom:4px}
 .welcome-left h2 span{color:var(--cat)}
 .welcome-left .welcome-date{font-size:.8rem;color:var(--text-dim)}
-.welcome-gauge{text-align:center;min-width:90px}
-.welcome-gauge-val{font-size:2.4rem;font-weight:900;line-height:1}
+.welcome-streak{font-size:.75rem;color:var(--text-dim);margin-top:6px;display:flex;align-items:center;gap:6px}
+.welcome-streak span{color:var(--cat);font-weight:700}
+.welcome-gauges{display:flex;align-items:center;gap:20px;flex-wrap:wrap}
+.welcome-gauge{text-align:center;min-width:90px;position:relative}
+.welcome-gauge-ring{width:72px;height:72px;margin:0 auto;position:relative}
+.welcome-gauge-ring svg{transform:rotate(-90deg)}
+.welcome-gauge-ring .ring-bg{stroke:var(--surface3);stroke-width:6;fill:none}
+.welcome-gauge-ring .ring-fg{stroke-width:6;fill:none;stroke-linecap:round;transition:stroke-dashoffset .6s ease,stroke .4s}
+.welcome-gauge-val{font-size:1.75rem;font-weight:900;line-height:1;position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);margin-top:-2px}
 .welcome-gauge-lbl{font-size:.65rem;text-transform:uppercase;letter-spacing:.8px;
   color:var(--text-dim);margin-top:4px;font-weight:700}
+.fleet-card{backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);background:rgba(18,20,28,.6)}
 
 /* ------------------------------------------------------------------ */
 /*  Machine selector cards                                            */
@@ -128,14 +142,20 @@ input,select,textarea{font-family:inherit}
 .fleet-card-date{font-size:.7rem;color:var(--text-dim);margin-bottom:10px}
 .fleet-card .btn{width:100%;padding:8px 12px;font-size:.8rem}
 .machine-section-title{font-size:.8rem;font-weight:700;color:var(--text-dim);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px}
-#machine-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px}
+#machine-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px;perspective:800px}
 .machine-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:20px 16px;text-align:center;cursor:pointer;transition:all .3s ease;position:relative}
-.machine-card:hover{border-color:var(--cat);transform:translateY(-3px);
-  box-shadow:0 8px 24px rgba(0,0,0,.4),0 0 12px rgba(255,205,17,.06)}
+  padding:0;text-align:center;cursor:pointer;transition:transform .3s ease,border-color .3s,box-shadow .3s;position:relative;
+  overflow:hidden;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);
+  transform-style:preserve-3d}
+.machine-card:hover{border-color:var(--cat);transform:translateY(-4px) rotateX(2deg) rotateY(-2deg);
+  box-shadow:0 12px 28px rgba(0,0,0,.4),0 0 16px rgba(255,205,17,.08)}
 .machine-card.selected{border-color:var(--cat);background:rgba(255,205,17,.04);
   box-shadow:0 0 20px rgba(255,205,17,.1)}
-.machine-card .mc-icon{font-size:2rem;margin-bottom:8px;display:block}
+.machine-card-img-wrap{height:80px;background:var(--surface2);position:relative;overflow:hidden}
+.machine-card-img-wrap img{width:100%;height:100%;object-fit:cover}
+.machine-card-img-wrap::after{content:'';position:absolute;inset:0;background:linear-gradient(to bottom,transparent 30%,rgba(0,0,0,.7) 100%)}
+.machine-card .mc-body{padding:12px 16px}
+.machine-card .mc-icon{font-size:1.5rem;margin-bottom:4px;display:block}
 .machine-card .mc-name{font-size:.82rem;font-weight:700;margin-bottom:4px}
 .machine-card .mc-count{font-size:.7rem;color:var(--text-dim)}
 .machine-card .mc-select-btn{margin-top:10px;padding:5px 16px;border-radius:16px;border:1px solid var(--border);
@@ -154,10 +174,13 @@ input,select,textarea{font-family:inherit}
 
 #component-list{display:grid;grid-template-columns:repeat(2,1fr);gap:12px}
 
-.comp-card{background:var(--surface);border-radius:var(--radius);padding:16px;
-  border:1px solid var(--border);transition:all .3s ease;position:relative;overflow:hidden}
+.comp-card{background:rgba(18,20,28,.6);border-radius:var(--radius);padding:16px;
+  border:1px solid var(--border);transition:all .3s ease;position:relative;overflow:hidden;
+  backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 .comp-card:hover{border-color:rgba(255,205,17,.4);transform:translateY(-2px);
   box-shadow:0 6px 20px rgba(0,0,0,.4)}
+.comp-card .comp-sparkline{position:absolute;bottom:0;left:0;right:0;height:24px;opacity:0;transition:opacity .25s;pointer-events:none;background:linear-gradient(to top,rgba(0,0,0,.3),transparent)}
+.comp-card:hover .comp-sparkline{opacity:1}
 .comp-card.done{border-left:3px solid var(--pass)}
 .comp-icon{font-size:1.3rem;margin-bottom:6px;display:block}
 .comp-top{display:flex;align-items:center;gap:8px}
@@ -174,11 +197,14 @@ input,select,textarea{font-family:inherit}
 
 .badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:.65rem;
   font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-top:6px}
-.badge.pass{background:rgba(34,197,94,.1);color:var(--pass);border:1px solid rgba(34,197,94,.2)}
-.badge.monitor{background:rgba(234,179,8,.1);color:var(--monitor);border:1px solid rgba(234,179,8,.2)}
-.badge.fail{background:rgba(239,68,68,.1);color:var(--fail);border:1px solid rgba(239,68,68,.2)}
+.badge.pass{background:rgba(34,197,94,.1);color:var(--pass);border:1px solid rgba(34,197,94,.2);box-shadow:0 0 12px rgba(34,197,94,.25);animation:badge-glow-pass 2s ease-in-out infinite}
+.badge.monitor{background:rgba(234,179,8,.1);color:var(--monitor);border:1px solid rgba(234,179,8,.2);box-shadow:0 0 12px rgba(234,179,8,.25);animation:badge-glow-monitor 2s ease-in-out infinite}
+.badge.fail{background:rgba(239,68,68,.1);color:var(--fail);border:1px solid rgba(239,68,68,.2);box-shadow:0 0 12px rgba(239,68,68,.25);animation:badge-glow-fail 2s ease-in-out infinite}
 .badge.pending{background:var(--surface2);color:var(--text-dim);border:1px solid var(--border)}
 .badge.invalid{background:rgba(156,163,175,.08);color:#9ca3af;border:1px solid rgba(156,163,175,.15)}
+@keyframes badge-glow-pass{0%,100%{box-shadow:0 0 12px rgba(34,197,94,.25)}50%{box-shadow:0 0 20px rgba(34,197,94,.4)}}
+@keyframes badge-glow-monitor{0%,100%{box-shadow:0 0 12px rgba(234,179,8,.25)}50%{box-shadow:0 0 20px rgba(234,179,8,.4)}}
+@keyframes badge-glow-fail{0%,100%{box-shadow:0 0 12px rgba(239,68,68,.25)}50%{box-shadow:0 0 20px rgba(239,68,68,.4)}}
 
 .comp-observation{font-size:.76rem;color:var(--text-dim);margin-top:6px;line-height:1.4}
 .comp-action{font-size:.74rem;color:var(--monitor);margin-top:3px;font-style:italic}
@@ -200,7 +226,8 @@ input,select,textarea{font-family:inherit}
   font-size:.85rem;text-transform:uppercase;letter-spacing:.7px;transition:var(--transition)}
 .btn-primary{background:var(--cat);color:#000}
 .btn-primary:hover{background:#ffe04a;box-shadow:0 0 20px rgba(255,205,17,.25)}
-.btn-primary:active{transform:scale(.97)}
+.btn-primary:active{transform:scale(0.96);transition:transform .1s}
+.btn-secondary:active,.icon-btn:active,.tab-btn:active{transform:scale(0.97);transition:transform .1s}
 .btn-primary:disabled{opacity:.3;cursor:not-allowed;box-shadow:none}
 .btn-secondary{background:var(--surface);color:var(--text);border:1px solid var(--border)}
 .btn-secondary:hover{border-color:var(--cat);background:var(--surface2)}
@@ -238,6 +265,10 @@ input,select,textarea{font-family:inherit}
 .report-table .status-dot.fail{background:var(--fail)}
 .report-divider{height:1px;background:var(--border);margin:20px 0}
 .audio-player{width:100%;margin-top:8px;border-radius:var(--radius);height:42px}
+.report-download-section{margin-top:24px;padding:20px;background:var(--surface2);border-radius:var(--radius-lg);border:1px solid var(--border)}
+.report-download-section h3{font-size:.75rem;text-transform:uppercase;letter-spacing:1px;color:var(--text-dim);margin-bottom:14px;font-weight:700}
+.report-download-btns{display:flex;flex-wrap:wrap;gap:12px}
+.report-dl-btn{min-height:44px}
 
 /* ------------------------------------------------------------------ */
 /*  Parts ID                                                          */
@@ -273,19 +304,10 @@ input,select,textarea{font-family:inherit}
 .cam-viewfinder-inner{position:relative;width:100%;flex:1;min-height:200px;
   border-radius:var(--radius-lg);overflow:hidden;background:#000;
   box-shadow:0 0 0 1px var(--border),0 12px 40px rgba(0,0,0,.5)}
-.cam-viewfinder-inner video,.cam-viewfinder-inner .cam-preview-video{width:100%;height:100%;
-  min-height:50vh;object-fit:cover;display:block}
-.cam-viewfinder-inner .cam-preview-video{max-height:70dvh}
+.cam-viewfinder-inner video{width:100%;height:100%;min-height:50vh;object-fit:cover;display:block}
 .cam-top-bar{position:absolute;top:0;left:0;right:0;padding:12px 16px;
   background:linear-gradient(to bottom,rgba(0,0,0,.7),transparent);
-  display:flex;align-items:center;justify-content:space-between;z-index:5}
-.cam-mode-toggle{display:flex;border-radius:999px;background:rgba(0,0,0,.5);
-  padding:4px;border:1px solid rgba(255,255,255,.1)}
-.cam-mode-btn{padding:8px 20px;border-radius:999px;font-size:.8rem;font-weight:700;
-  text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);
-  background:transparent;border:none;cursor:pointer;transition:var(--transition)}
-.cam-mode-btn.active{background:var(--cat);color:#000}
-.cam-mode-btn:not(.active):hover{color:var(--text)}
+  display:flex;align-items:center;justify-content:flex-end;z-index:5}
 .close-cam{width:40px;height:40px;border-radius:50%;border:none;
   background:rgba(0,0,0,.6);color:#fff;font-size:1.3rem;display:flex;
   align-items:center;justify-content:center;cursor:pointer;transition:var(--transition)}
@@ -298,25 +320,12 @@ input,select,textarea{font-family:inherit}
   background:transparent;position:relative;transition:var(--transition);flex-shrink:0;cursor:pointer}
 .shutter-btn::after{content:'';position:absolute;inset:8px;border-radius:50%;background:rgba(255,255,255,.95);transition:var(--transition)}
 .shutter-btn:hover::after{background:#fff}
-.record-btn{width:64px;height:64px;border-radius:50%;border:none;
-  background:var(--fail);color:#fff;cursor:pointer;transition:var(--transition);
-  display:flex;align-items:center;justify-content:center;flex-shrink:0;
-  box-shadow:0 0 0 4px rgba(239,68,68,.3)}
-.record-btn:hover{background:#f87171;transform:scale(1.02)}
-.record-btn.recording{animation:record-pulse 1.2s ease-in-out infinite}
-@keyframes record-pulse{0%,100%{box-shadow:0 0 0 4px rgba(239,68,68,.5)}50%{box-shadow:0 0 0 8px rgba(239,68,68,.2)}}
-.record-btn .record-dot{width:24px;height:24px;border-radius:50%;background:#fff}
-.record-btn.stop-btn{border-radius:12px;width:56px;height:56px;background:#fff;color:#000}
-.record-btn.stop-btn .record-dot{display:none}
-.cam-cancel-btn,.cam-submit-btn{padding:12px 28px;border-radius:var(--radius);
+.cam-cancel-btn{padding:12px 28px;border-radius:var(--radius);
   font-size:.85rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
   cursor:pointer;transition:var(--transition);border:none}
 .cam-cancel-btn{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.25)}
 .cam-cancel-btn:hover{background:rgba(255,255,255,.25)}
-.cam-submit-btn{background:var(--cat);color:#000}
-.cam-submit-btn:hover{background:#ffe066}
 .cam-controls-wrap{display:flex;justify-content:center;align-items:center;gap:20px;width:100%}
-.cam-preview-actions{display:flex;gap:16px;align-items:center;justify-content:center;flex-wrap:wrap}
 
 /* ------------------------------------------------------------------ */
 /*  Loader / spinner                                                  */
@@ -324,6 +333,18 @@ input,select,textarea{font-family:inherit}
 .spinner{display:inline-block;width:18px;height:18px;border:2px solid var(--border);
   border-top-color:var(--cat);border-radius:50%;animation:spin .6s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
+.quick-actions-wrap{position:fixed;bottom:24px;right:24px;z-index:150;display:flex;flex-direction:column-reverse;align-items:flex-end;gap:12px}
+.quick-actions-fab{width:56px;height:56px;border-radius:50%;background:var(--cat);color:#000;font-size:1.5rem;font-weight:700;
+  display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 20px rgba(255,205,17,.4);
+  transition:transform .25s,box-shadow .25s;border:none}
+.quick-actions-fab:hover{transform:scale(1.08);box-shadow:0 6px 24px rgba(255,205,17,.5)}
+.quick-actions-fab.open .quick-actions-icon{transform:rotate(45deg)}
+.quick-actions-icon{transition:transform .25s}
+.quick-actions-menu{display:flex;flex-direction:column;gap:8px;opacity:0;visibility:hidden;transform:translateY(10px);transition:opacity .2s,transform .2s,visibility .2s}
+.quick-actions-wrap.open .quick-actions-menu{opacity:1;visibility:visible;transform:translateY(0)}
+.quick-action-item{padding:12px 18px;border-radius:var(--radius);border:1px solid var(--border);background:var(--surface);
+  color:var(--text);font-size:.85rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:var(--transition)}
+.quick-action-item:hover{background:var(--surface2);border-color:var(--cat)}
 .loading-overlay{position:fixed;inset:0;z-index:300;background:rgba(0,0,0,.75);
   display:none;align-items:center;justify-content:center;flex-direction:column;gap:14px;
   backdrop-filter:blur(6px)}
@@ -366,6 +387,7 @@ input,select,textarea{font-family:inherit}
 .lp-hero-wrap{position:relative;overflow:hidden}
 .lp-hero-bg{position:absolute;inset:0;background:url('https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=1200') center/cover no-repeat;
   filter:brightness(.25) saturate(.7);z-index:0}
+.lp-hero-particles{position:absolute;inset:0;width:100%;height:100%;z-index:1;pointer-events:none;opacity:.6}
 .lp-hero-bg::after{content:'';position:absolute;inset:0;
   background:linear-gradient(180deg,rgba(15,17,23,.4) 0%,rgba(15,17,23,.95) 100%)}
 .lp-hero{position:relative;z-index:1;text-align:center;padding:120px 24px 80px;max-width:800px;margin:0 auto}
@@ -646,7 +668,7 @@ input,select,textarea{font-family:inherit}
   .app-bar{padding:10px 16px;flex-wrap:wrap}
   .cam-viewfinder{padding:0;max-height:100dvh}
   .cam-viewfinder-inner{min-height:100dvh;border-radius:0;max-height:100dvh}
-  .cam-viewfinder-inner video,.cam-viewfinder-inner .cam-preview-video{min-height:60dvh;max-height:100dvh}
+  .cam-viewfinder-inner video{min-height:60dvh;max-height:100dvh}
   .modal-overlay.open{padding:0;align-items:stretch}
   .live-container{aspect-ratio:auto;min-height:50dvh}
   .live-container video{min-height:50dvh}
@@ -686,6 +708,7 @@ input,select,textarea{font-family:inherit}
   <!-- Hero with background image -->
   <div class="lp-hero-wrap">
     <div class="lp-hero-bg"></div>
+    <canvas id="lp-hero-particles" class="lp-hero-particles" aria-hidden="true"></canvas>
     <section class="lp-hero">
       <h1>CATalyze</h1>
       <p class="lp-tagline">AI-Powered Heavy Equipment Inspection. Instantly analyze machine components, track health trends, and generate professional reports — all from the field.</p>
@@ -996,10 +1019,19 @@ input,select,textarea{font-family:inherit}
     <div class="welcome-left">
       <h2 id="welcome-msg">Good morning, <span>Inspector</span></h2>
       <p class="welcome-date" id="welcome-date"></p>
+      <p class="welcome-streak" id="welcome-streak">🔥 <span id="streak-count">0</span> day inspection streak</p>
     </div>
-    <div class="welcome-gauge">
-      <div class="welcome-gauge-val" id="hero-health-score" style="color:var(--text-dim)">—</div>
-      <div class="welcome-gauge-lbl">Fleet Health</div>
+    <div class="welcome-gauges">
+      <div class="welcome-gauge">
+        <div class="welcome-gauge-ring">
+          <svg width="72" height="72" viewBox="0 0 72 72">
+            <circle class="ring-bg" cx="36" cy="36" r="30"/>
+            <circle class="ring-fg" id="hero-health-ring" cx="36" cy="36" r="30" stroke-dasharray="188.5" stroke-dashoffset="188.5"/>
+          </svg>
+          <div class="welcome-gauge-val" id="hero-health-score">—</div>
+        </div>
+        <div class="welcome-gauge-lbl">Fleet Health</div>
+      </div>
     </div>
   </div>
 
@@ -1076,7 +1108,14 @@ input,select,textarea{font-family:inherit}
       </div>
     </div>
 
-    <button class="btn btn-secondary btn-full" id="btn-download">Download Report</button>
+    <div class="report-download-section">
+      <h3>Download &amp; Share</h3>
+      <div class="report-download-btns">
+        <button type="button" class="btn btn-primary report-dl-btn" id="btn-download-pdf">Download PDF</button>
+        <button type="button" class="btn btn-secondary report-dl-btn" id="btn-download-csv">Download CSV</button>
+        <button type="button" class="btn btn-secondary report-dl-btn" id="btn-copy-link">Copy Share Link</button>
+      </div>
+    </div>
   </div>
 </section>
 
@@ -1247,6 +1286,16 @@ input,select,textarea{font-family:inherit}
 
 </div><!-- /app-content -->
 </div><!-- /app-body -->
+  <!-- Quick Actions FAB (inside main-app so hidden on landing) -->
+  <div class="quick-actions-wrap" id="quick-actions-wrap">
+    <div class="quick-actions-fab" id="quick-actions-fab" title="Quick actions">
+      <span class="quick-actions-icon">+</span>
+    </div>
+    <div class="quick-actions-menu" id="quick-actions-menu">
+      <button type="button" class="quick-action-item" data-action="inspect">📷 New Inspection</button>
+      <button type="button" class="quick-action-item" data-action="report">📋 View Reports</button>
+    </div>
+  </div>
 </div><!-- /main-app -->
 
 <!-- ================================================================ -->
@@ -1256,32 +1305,14 @@ input,select,textarea{font-family:inherit}
   <div class="cam-viewfinder">
     <div class="cam-viewfinder-inner">
       <video id="camera-video" autoplay playsinline></video>
-      <video id="cam-preview-video" class="cam-preview-video" style="display:none" playsinline></video>
       <canvas id="camera-canvas"></canvas>
       <div class="cam-top-bar">
-        <div class="cam-mode-toggle">
-          <button type="button" class="cam-mode-btn active" id="cam-mode-photo" data-mode="photo">Photo</button>
-          <button type="button" class="cam-mode-btn" id="cam-mode-video" data-mode="video">Video</button>
-        </div>
         <button class="close-cam" id="close-cam" type="button" aria-label="Close">&times;</button>
       </div>
       <div class="cam-bottom-bar">
-        <div id="cam-controls-photo" class="cam-controls-wrap">
+        <div class="cam-controls-wrap">
           <button class="cam-cancel-btn" id="cam-cancel-btn" type="button">Cancel</button>
           <button class="shutter-btn" id="shutter-btn" type="button" aria-label="Capture"></button>
-        </div>
-        <div id="cam-controls-video-idle" class="cam-controls-wrap" style="display:none">
-          <button class="cam-cancel-btn" id="cam-video-cancel-btn" type="button">Cancel</button>
-          <button class="record-btn" id="cam-record-btn" type="button" title="Start recording"><span class="record-dot"></span></button>
-        </div>
-        <div id="cam-controls-video-rec" class="cam-controls-wrap" style="display:none">
-          <button class="record-btn stop-btn" id="cam-stop-record-btn" type="button" title="Stop recording">Stop</button>
-        </div>
-        <div id="cam-controls-video-preview" class="cam-controls-wrap" style="display:none">
-          <div class="cam-preview-actions">
-            <button class="cam-cancel-btn" id="cam-preview-cancel-btn" type="button">Cancel</button>
-            <button class="cam-submit-btn" id="cam-preview-submit-btn" type="button">Submit for analysis</button>
-          </div>
         </div>
       </div>
     </div>
@@ -1298,7 +1329,7 @@ input,select,textarea{font-family:inherit}
 <div class="toast" id="toast"></div>
 
 <!-- Hidden file input for component image upload -->
-<input type="file" id="comp-upload-input" accept="image/*,video/*" hidden>
+<input type="file" id="comp-upload-input" accept="image/*" hidden>
 
 <script>
 /* ================================================================== */
@@ -1311,10 +1342,6 @@ let inspectionOrder = [];  // tracks order of inspections for timeline
 let activeStream = null;   // camera MediaStream
 let captureTarget = null;  // which component the camera is open for
 let recognition = null;    // SpeechRecognition instance
-let cameraCaptureMode = 'photo';  // 'photo' | 'video'
-let mediaRecorder = null;
-let recordedChunks = [];
-let recordedBlob = null;
 let pastInspectionCache = [];  // all inspection results fetched from GET /inspect/results (persists across machine switch)
 let inspectionTimelineList = [];  // every inspection as a separate entry for timeline chart (append on each new result)
 let userFleet = [];  // machine names in user's fleet (from GET /fleet + localStorage)
@@ -1452,12 +1479,57 @@ document.addEventListener('DOMContentLoaded', async () => {
     renderMachineGrid();
   });
   initSignIn();
+  initLandingParticles();
   initCamera();
   initPartsID();
   initLive();
+  initQuickActions();
   document.getElementById('btn-report').addEventListener('click', generateReport);
-  document.getElementById('btn-download').addEventListener('click', downloadReport);
+  document.getElementById('btn-download-pdf').addEventListener('click', downloadReportPDF);
+  document.getElementById('btn-download-csv').addEventListener('click', downloadReportCSV);
+  document.getElementById('btn-copy-link').addEventListener('click', copyShareLink);
 });
+
+function initLandingParticles() {
+  const canvas = document.getElementById('lp-hero-particles');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const particles = [];
+  const count = 50;
+  function resize() {
+    canvas.width = canvas.offsetWidth;
+    canvas.height = canvas.offsetHeight;
+    if (particles.length === 0) {
+      for (let i = 0; i < count; i++) {
+        particles.push({
+          x: Math.random() * canvas.width,
+          y: Math.random() * canvas.height,
+          r: Math.random() * 2 + 0.5,
+          vx: (Math.random() - 0.5) * 0.5,
+          vy: (Math.random() - 0.5) * 0.5,
+        });
+      }
+    }
+  }
+  function loop() {
+    if (!canvas.offsetParent) { requestAnimationFrame(loop); return; }
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    particles.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      if (p.x < 0 || p.x > canvas.width) p.vx *= -1;
+      if (p.y < 0 || p.y > canvas.height) p.vy *= -1;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,205,17,.4)';
+      ctx.fill();
+    });
+    requestAnimationFrame(loop);
+  }
+  resize();
+  window.addEventListener('resize', resize);
+  requestAnimationFrame(loop);
+}
 
 function initStatsCounters() {
   const bar = document.getElementById('lp-stats-bar');
@@ -1504,6 +1576,7 @@ function showApp() {
     now.toLocaleDateString('en-US', {weekday:'long',month:'long',day:'numeric',year:'numeric'}) +
     ' · ' + now.toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
   loadPastResultsAndRestore();
+  updateInspectionStreak();
 }
 
 function applyResultsForMachine(machineName) {
@@ -1566,6 +1639,7 @@ async function loadPastResultsAndRestore() {
   renderFleetSection();
   if (lastMachine) selectMachine(lastMachine);
   else if (pastInspectionCache.length) applyResultsForMachine(currentMachine);
+  updateInspectionStreak();
 }
 
 function showLanding() {
@@ -1924,12 +1998,25 @@ const MACHINE_ICONS = {
   'loader':'🏗️','excavator':'⛏️','truck':'🚛','dozer':'🚜',
   'backhoe':'🔧','mini':'🔩','default':'🏭'
 };
+const MACHINE_IMAGES = {
+  'Cat 950 Wheel Loader': 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=400',
+  'Cat 320 Excavator': 'https://images.unsplash.com/photo-1558618666-fcd25c85cd64?w=400',
+  'Cat 740 Articulated Truck': 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400',
+  'Cat D6 Dozer': 'https://images.unsplash.com/photo-1589939705384-5185137a7f0f?w=400',
+  'Cat 308 Mini Excavator': 'https://images.unsplash.com/photo-1566576912321-d58ddd7a6088?w=400',
+  'Cat 420 Backhoe Loader': 'https://images.unsplash.com/photo-1541888946425-d81bb19240f5?w=400',
+  'Cat 980 Wheel Loader': 'https://images.unsplash.com/photo-1581094794329-c8112a89af12?w=400',
+  'Cat 745 Articulated Truck': 'https://images.unsplash.com/photo-1504307651254-35680f356dfd?w=400',
+};
 function getMachineIcon(name) {
   const l = name.toLowerCase();
   for (const [k, v] of Object.entries(MACHINE_ICONS)) {
     if (k !== 'default' && l.includes(k)) return v;
   }
   return MACHINE_ICONS.default;
+}
+function getMachineImage(name) {
+  return MACHINE_IMAGES[name] || '';
 }
 
 async function loadMachines() {
@@ -1956,11 +2043,14 @@ function renderMachineGrid() {
   Object.keys(machines).forEach(name => {
     const card = document.createElement('div');
     card.className = 'machine-card' + (name === currentMachine ? ' selected' : '');
-    card.innerHTML = `
-      <span class="mc-icon">${getMachineIcon(name)}</span>
-      <div class="mc-name">${name}</div>
-      <div class="mc-count">${machines[name].length} components</div>
-      <button class="mc-select-btn">${name === currentMachine ? 'Selected' : addMachineMode ? 'Add to Fleet' : 'Select'}</button>
+    const imgUrl = getMachineImage(name);
+    card.innerHTML = (imgUrl ? `<div class="machine-card-img-wrap"><img src="${imgUrl}" alt="${esc(name)}" loading="lazy"></div>` : '') + `
+      <div class="mc-body">
+        <span class="mc-icon">${getMachineIcon(name)}</span>
+        <div class="mc-name">${name}</div>
+        <div class="mc-count">${machines[name].length} components</div>
+        <button class="mc-select-btn">${name === currentMachine ? 'Selected' : addMachineMode ? 'Add to Fleet' : 'Select'}</button>
+      </div>
     `;
     card.addEventListener('click', () => {
       if (addMachineMode) {
@@ -2046,8 +2136,22 @@ function createComponentCard(comp) {
     <div class="comp-observation" id="obs-${slugify(comp)}"></div>
     <div class="comp-action" id="act-${slugify(comp)}"></div>
     <ol class="comp-steps" id="steps-${slugify(comp)}"></ol>
+    <div class="comp-sparkline" id="spark-${slugify(comp)}" aria-hidden="true"></div>
   `;
   return card;
+}
+
+function updateCompSparkline(comp) {
+  const el = document.getElementById('spark-' + slugify(comp));
+  if (!el) return;
+  const list = inspectionTimelineList.filter(r => (r.machine || '') === currentMachine && (r.component || '') === comp);
+  if (list.length < 2) { el.innerHTML = ''; return; }
+  const sorted = list.slice().sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+  const scores = sorted.map(r => r.status === 'PASS' ? 100 : r.status === 'MONITOR' ? 50 : 0);
+  const w = 200; const h = 24;
+  const max = Math.max(...scores, 1);
+  const points = scores.map((v, i) => `${(i / (scores.length - 1)) * w},${h - (v / max) * (h - 2)}`).join(' ');
+  el.innerHTML = `<svg width="100%" height="24" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><polyline fill="none" stroke="var(--cat)" stroke-width="1.5" stroke-opacity="0.8" points="${points}"/></svg>`;
 }
 
 function updateComponentUI(comp, data) {
@@ -2085,6 +2189,7 @@ function updateComponentUI(comp, data) {
   const timeEl = document.getElementById('time-' + s);
   if (timeEl) timeEl.textContent = 'Inspected ' + new Date().toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
   if (card) card.classList.add('done');
+  updateCompSparkline(comp);
   updateProgress();
 }
 
@@ -2101,10 +2206,12 @@ function updateProgress() {
 
 function updateHeroHealth() {
   const scoreEl = document.getElementById('hero-health-score');
+  const ringEl = document.getElementById('hero-health-ring');
   const vals = Object.values(results);
   if (!vals.length) {
     scoreEl.textContent = '—';
     scoreEl.style.color = 'var(--text-dim)';
+    if (ringEl) { ringEl.style.strokeDashoffset = '188.5'; ringEl.style.stroke = 'var(--surface3)'; }
     return;
   }
   const map = {PASS:100, MONITOR:50, FAIL:0};
@@ -2115,7 +2222,46 @@ function updateHeroHealth() {
   });
   const pct = count ? Math.round(sum / count) : 0;
   scoreEl.textContent = pct + '%';
-  scoreEl.style.color = pct >= 80 ? 'var(--pass)' : pct >= 50 ? 'var(--monitor)' : 'var(--fail)';
+  const color = pct >= 80 ? '#22c55e' : pct >= 50 ? '#eab308' : '#ef4444';
+  scoreEl.style.color = color;
+  if (ringEl) {
+    ringEl.style.stroke = color;
+    ringEl.style.strokeDashoffset = 188.5 - (188.5 * pct / 100);
+  }
+  updateInspectionStreak();
+}
+
+const STREAK_KEY = 'catalyze_inspection_dates';
+function updateInspectionStreak() {
+  const today = new Date().toISOString().slice(0, 10);
+  let dates = [];
+  try {
+    const raw = localStorage.getItem(STREAK_KEY);
+    if (raw) dates = JSON.parse(raw);
+  } catch { dates = []; }
+  const allResults = [...Object.values(results), ...pastInspectionCache];
+  const latest = allResults.reduce((best, r) => {
+    const t = r.timestamp || r.date || '';
+    return (!best || t > best) ? t : best;
+  }, null);
+  if (latest) {
+    const d = latest.slice(0, 10);
+    if (!dates.includes(d)) dates.push(d);
+    dates.sort();
+    dates = [...new Set(dates)];
+    localStorage.setItem(STREAK_KEY, JSON.stringify(dates));
+  }
+  let streak = 0;
+  const sorted = [...dates].sort((a, b) => b.localeCompare(a));
+  for (let i = 0; i < sorted.length; i++) {
+    const want = new Date();
+    want.setDate(want.getDate() - i);
+    const wantStr = want.toISOString().slice(0, 10);
+    if (sorted[i] === wantStr) streak++;
+    else break;
+  }
+  const countEl = document.getElementById('streak-count');
+  if (countEl) countEl.textContent = streak;
 }
 
 function updateSidebar() {
@@ -2163,47 +2309,10 @@ function initCamera() {
   });
   document.getElementById('shutter-btn').addEventListener('click', capturePhoto);
   document.getElementById('cam-cancel-btn').addEventListener('click', closeCamera);
-  document.getElementById('cam-mode-photo').addEventListener('click', () => setCameraMode('photo'));
-  document.getElementById('cam-mode-video').addEventListener('click', () => setCameraMode('video'));
-  document.getElementById('cam-video-cancel-btn').addEventListener('click', closeCamera);
-  document.getElementById('cam-record-btn').addEventListener('click', startVideoRecording);
-  document.getElementById('cam-stop-record-btn').addEventListener('click', stopVideoRecording);
-  document.getElementById('cam-preview-cancel-btn').addEventListener('click', cancelVideoPreview);
-  document.getElementById('cam-preview-submit-btn').addEventListener('click', submitRecordedVideo);
-}
-
-function setCameraMode(mode) {
-  cameraCaptureMode = mode;
-  document.getElementById('cam-mode-photo').classList.toggle('active', mode === 'photo');
-  document.getElementById('cam-mode-video').classList.toggle('active', mode === 'video');
-  document.getElementById('cam-controls-photo').style.display = mode === 'photo' ? 'flex' : 'none';
-  const video = document.getElementById('camera-video');
-  const preview = document.getElementById('cam-preview-video');
-  if (mode === 'video' && recordedBlob) {
-    showVideoPreviewState();
-  } else {
-    document.getElementById('cam-controls-video-idle').style.display = mode === 'video' && !recordedBlob ? 'flex' : 'none';
-    document.getElementById('cam-controls-video-rec').style.display = 'none';
-    document.getElementById('cam-controls-video-preview').style.display = 'none';
-    video.style.display = 'block';
-    preview.style.display = 'none';
-  }
 }
 
 async function openCamera(comp) {
   captureTarget = comp;
-  recordedBlob = null;
-  recordedChunks = [];
-  cameraCaptureMode = 'photo';
-  document.getElementById('cam-mode-photo').classList.add('active');
-  document.getElementById('cam-mode-video').classList.remove('active');
-  document.getElementById('cam-controls-photo').style.display = 'flex';
-  document.getElementById('cam-controls-video-idle').style.display = 'none';
-  document.getElementById('cam-controls-video-rec').style.display = 'none';
-  document.getElementById('cam-controls-video-preview').style.display = 'none';
-  document.getElementById('camera-video').style.display = 'block';
-  document.getElementById('cam-preview-video').style.display = 'none';
-
   const modal = document.getElementById('camera-modal');
   const video = document.getElementById('camera-video');
   try {
@@ -2218,18 +2327,13 @@ async function openCamera(comp) {
 }
 
 function closeCamera() {
-  stopVideoRecording();
   const modal = document.getElementById('camera-modal');
   const video = document.getElementById('camera-video');
-  const preview = document.getElementById('cam-preview-video');
   if (activeStream) {
     activeStream.getTracks().forEach(track => track.stop());
     activeStream = null;
   }
   video.srcObject = null;
-  preview.src = '';
-  recordedBlob = null;
-  recordedChunks = [];
   modal.classList.remove('open');
 }
 
@@ -2246,68 +2350,6 @@ async function capturePhoto() {
   }, 'image/jpeg', 0.85);
 }
 
-function startVideoRecording() {
-  if (!activeStream || mediaRecorder) return;
-  recordedChunks = [];
-  const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
-  mediaRecorder = new MediaRecorder(activeStream);
-  mediaRecorder.ondataavailable = (e) => { if (e.data.size) recordedChunks.push(e.data); };
-  mediaRecorder.onstop = () => {
-    mediaRecorder = null;
-    document.getElementById('cam-controls-video-rec').style.display = 'none';
-    if (recordedChunks.length) {
-      recordedBlob = new Blob(recordedChunks, { type: mime.split(';')[0] });
-      showVideoPreviewState();
-    } else {
-      document.getElementById('cam-controls-video-idle').style.display = 'flex';
-    }
-  };
-  mediaRecorder.start(200);
-  document.getElementById('cam-record-btn').classList.add('recording');
-  document.getElementById('cam-controls-video-idle').style.display = 'none';
-  document.getElementById('cam-controls-video-rec').style.display = 'flex';
-}
-
-function stopVideoRecording() {
-  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-    mediaRecorder.stop();
-    document.getElementById('cam-record-btn').classList.remove('recording');
-  }
-}
-
-function showVideoPreviewState() {
-  const video = document.getElementById('camera-video');
-  const preview = document.getElementById('cam-preview-video');
-  if (preview.src) URL.revokeObjectURL(preview.src);
-  video.style.display = 'none';
-  preview.style.display = 'block';
-  preview.src = recordedBlob ? URL.createObjectURL(recordedBlob) : '';
-  preview.muted = true;
-  document.getElementById('cam-controls-photo').style.display = 'none';
-  document.getElementById('cam-controls-video-idle').style.display = 'none';
-  document.getElementById('cam-controls-video-rec').style.display = 'none';
-  document.getElementById('cam-controls-video-preview').style.display = 'flex';
-}
-
-function cancelVideoPreview() {
-  recordedBlob = null;
-  recordedChunks = [];
-  const preview = document.getElementById('cam-preview-video');
-  if (preview.src) URL.revokeObjectURL(preview.src);
-  preview.src = '';
-  preview.style.display = 'none';
-  document.getElementById('camera-video').style.display = 'block';
-  document.getElementById('cam-controls-video-preview').style.display = 'none';
-  document.getElementById('cam-controls-video-idle').style.display = 'flex';
-}
-
-async function submitRecordedVideo() {
-  if (!recordedBlob || !captureTarget) return;
-  const comp = captureTarget;
-  closeCamera();
-  await analyzeVideo(recordedBlob, comp);
-}
-
 let uploadTarget = null;
 
 function triggerUpload(comp) {
@@ -2317,45 +2359,9 @@ function triggerUpload(comp) {
   input.onchange = async () => {
     const file = input.files[0];
     if (!file || !uploadTarget) return;
-    const isVideo = file.type.startsWith('video/');
-    if (isVideo) await analyzeVideo(file, uploadTarget);
-    else await analyzeImage(file, uploadTarget);
+    await analyzeImage(file, uploadTarget);
   };
   input.click();
-}
-
-async function analyzeVideo(videoBlob, comp) {
-  showLoader('Analyzing video…');
-  const form = new FormData();
-  const ext = videoBlob.name && videoBlob.name.includes('.') ? videoBlob.name.split('.').pop() : 'webm';
-  form.append('video', videoBlob, videoBlob.name || 'recording.' + ext);
-  form.append('machine', currentMachine);
-  form.append('component', comp);
-  form.append('inspector_id', getInspectorIdForApi() || '');
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 120000);
-  try {
-    const resp = await fetch('/inspect/video', { method: 'POST', body: form, signal: controller.signal });
-    clearTimeout(timeoutId);
-    if (!resp.ok) {
-      const errBody = await resp.text();
-      let msg = resp.statusText;
-      try { const j = JSON.parse(errBody); msg = j.detail || msg; } catch (_) {}
-      throw new Error(msg);
-    }
-    const data = await resp.json();
-    results[comp] = data;
-    if (!inspectionOrder.includes(comp)) inspectionOrder.push(comp);
-    updateComponentUI(comp, data);
-    saveInspectionToBackend(data);
-    pushToInspectionCache(currentMachine, comp, data);
-    toast(`${comp}: ${data.status}`, data.status === 'FAIL' ? 'error' : 'success');
-  } catch (e) {
-    clearTimeout(timeoutId);
-    toast('Analysis failed: ' + (e.name === 'AbortError' ? 'Request timed out' : e.message), 'error');
-  } finally {
-    hideLoader();
-  }
 }
 
 async function analyzeImage(blob, comp) {
@@ -2530,14 +2536,107 @@ function renderReport(report) {
   });
 }
 
-function downloadReport() {
+async function downloadReportPDF() {
   if (!lastReport) return;
-  const blob = new Blob([lastReport.report_text], { type: 'text/plain' });
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF();
+  const pageW = doc.internal.pageSize.getWidth();
+  let y = 18;
+  doc.setFillColor(10, 11, 15);
+  doc.rect(0, 0, pageW, 32, 'F');
+  doc.setTextColor(255, 205, 17);
+  doc.setFontSize(20);
+  doc.text('CATalyze', 14, 22);
+  doc.setTextColor(232, 233, 237);
+  doc.setFontSize(10);
+  doc.text('Inspection Report', 14, 28);
+  y = 40;
+  doc.setTextColor(107, 110, 123);
+  doc.setFontSize(9);
+  doc.text('Inspector: ' + (getInspectorId() || '—'), 14, y);
+  y += 6;
+  doc.text('Machine: ' + (currentMachine || '—'), 14, y);
+  y += 6;
+  doc.text('Date: ' + new Date().toLocaleString(), 14, y);
+  y += 14;
+  const s = lastReport.summary || {};
+  doc.setFontSize(11);
+  doc.setTextColor(232, 233, 237);
+  doc.text('Summary — Pass: ' + (s.pass || 0) + '  Monitor: ' + (s.monitor || 0) + '  Fail: ' + (s.fail || 0), 14, y);
+  y += 12;
+  doc.setDrawColor(37, 40, 56);
+  doc.line(14, y, pageW - 14, y);
+  y += 10;
+  const rows = lastReport.results || [];
+  doc.setFontSize(9);
+  doc.setTextColor(107, 110, 123);
+  doc.text('Component', 14, y);
+  doc.text('Status', 60, y);
+  doc.text('Confidence', 90, y);
+  doc.text('Observation', 120, y);
+  y += 8;
+  doc.setDrawColor(37, 40, 56);
+  doc.line(14, y, pageW - 14, y);
+  y += 8;
+  rows.forEach(r => {
+    if (y > 270) { doc.addPage(); y = 20; }
+    doc.setTextColor(232, 233, 237);
+    doc.text((r.component || '—').slice(0, 20), 14, y);
+    const status = (r.status || '—').toUpperCase();
+    doc.setTextColor(status === 'PASS' ? 34, 197, 94 : status === 'FAIL' ? 239, 68, 68 : 234, 179, 8);
+    doc.text(status, 60, y);
+    doc.setTextColor(232, 233, 237);
+    doc.text((r.confidence != null ? Math.round(r.confidence * 100) + '%' : '—'), 90, y);
+    const obs = (r.observation || '—').slice(0, 55);
+    doc.setFontSize(8);
+    doc.text(obs, 120, y);
+    doc.setFontSize(9);
+    y += 6;
+    if (r.recommended_action && r.recommended_action !== 'None') {
+      doc.setTextColor(234, 179, 8);
+      doc.text('Action: ' + r.recommended_action.slice(0, 70), 14, y);
+      y += 6;
+    }
+    (r.maintenance_steps || []).slice(0, 2).forEach(step => {
+      doc.setTextColor(107, 110, 123);
+      doc.text('• ' + String(step).slice(0, 80), 18, y);
+      y += 5;
+    });
+    y += 4;
+  });
+  doc.save('CATalyze_Report_' + (currentMachine || 'Inspection').replace(/\s+/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.pdf');
+  toast('PDF downloaded', 'success');
+}
+
+function downloadReportCSV() {
+  if (!lastReport) return;
+  const rows = lastReport.results || [];
+  const headers = ['Component', 'Status', 'Confidence', 'Observation', 'Recommended Action', 'Maintenance Steps'];
+  const escape = (v) => (v == null ? '' : String(v).replace(/"/g, '""'));
+  const line = (arr) => arr.map(escape).map(v => '"' + v + '"').join(',');
+  const lines = [line(headers)];
+  rows.forEach(r => {
+    lines.push(line([
+      r.component,
+      r.status,
+      r.confidence != null ? Math.round(r.confidence * 100) + '%' : '',
+      r.observation,
+      r.recommended_action,
+      (r.maintenance_steps || []).join('; '),
+    ]));
+  });
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
   const a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = `CATalyze_Report_${currentMachine.replace(/\s+/g, '_')}_${new Date().toISOString().slice(0,10)}.txt`;
+  a.download = 'CATalyze_Inspection_' + (currentMachine || 'Report').replace(/\s+/g, '_') + '_' + new Date().toISOString().slice(0, 10) + '.csv';
   a.click();
   URL.revokeObjectURL(a.href);
+  toast('CSV downloaded', 'success');
+}
+
+function copyShareLink() {
+  const url = window.location.href;
+  navigator.clipboard.writeText(url).then(() => toast('Link copied to clipboard', 'success')).catch(() => toast('Could not copy link', 'error'));
 }
 
 /* ================================================================== */
@@ -2899,6 +2998,25 @@ function initLive() {
   document.getElementById('btn-start-live').addEventListener('click', startLive);
   document.getElementById('btn-stop-live').addEventListener('click', stopLive);
   document.getElementById('btn-live-voice').addEventListener('click', toggleLiveVoice);
+}
+
+function initQuickActions() {
+  const wrap = document.getElementById('quick-actions-wrap');
+  const fab = document.getElementById('quick-actions-fab');
+  const menu = document.getElementById('quick-actions-menu');
+  if (!wrap || !fab) return;
+  fab.addEventListener('click', () => {
+    wrap.classList.toggle('open');
+    fab.classList.toggle('open');
+  });
+  menu.querySelectorAll('.quick-action-item').forEach(btn => {
+    btn.addEventListener('click', () => {
+      wrap.classList.remove('open');
+      fab.classList.remove('open');
+      if (btn.dataset.action === 'inspect') document.querySelector('[data-tab="inspect"]').click();
+      else if (btn.dataset.action === 'report') document.querySelector('[data-tab="report"]').click();
+    });
+  });
 }
 
 function toggleLiveVoice() {
