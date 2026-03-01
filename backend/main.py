@@ -31,7 +31,9 @@ load_dotenv()
 from backend.modal_functions import analyze_image, analyze_live, analyze_voice, identify_part
 from backend.supermemory import (
     get_all_inspection_results,
+    get_fleet,
     get_inspection_history,
+    save_fleet,
     save_inspection_result,
 )
 from prompts.inspection import MACHINES
@@ -113,6 +115,15 @@ class SaveInspectionRequest(BaseModel):
     maintenance_steps: list[str] | None = None
     timestamp: str | None = None
     inspector_id: str | None = None
+
+
+class FleetSaveRequest(BaseModel):
+    inspector_id: str | None = None
+    machines: list[str] = []
+
+
+class TtsSpeakRequest(BaseModel):
+    text: str = ""
 
 
 # ---------------------------------------------------------------------------
@@ -609,6 +620,23 @@ async def get_inspect_results(
     return {"results": records}
 
 
+@app.post("/fleet/save")
+async def fleet_save(req: FleetSaveRequest):
+    """Save the user's fleet (list of machine names) to Supermemory."""
+    iid = req.inspector_id or ""
+    ok = await save_fleet(iid, req.machines)
+    return {"success": ok}
+
+
+@app.get("/fleet")
+async def fleet_get(
+    inspector_id: str = Query(..., description="Logged-in user email or ID"),
+):
+    """Return the user's fleet (list of machine names) from Supermemory."""
+    machines = await get_fleet(inspector_id)
+    return {"machines": machines}
+
+
 # ---- Report --------------------------------------------------------------
 
 
@@ -642,6 +670,17 @@ async def generate_report(req: ReportRequest):
         "results": req.results,
         "audio_base64": audio_base64,
     }
+
+
+@app.post("/tts/speak")
+async def tts_speak(req: TtsSpeakRequest):
+    """Generate TTS audio for the given text via ElevenLabs. Returns base64 MP3."""
+    text = (req.text or "").strip()
+    if not text:
+        return {"audio_base64": None}
+    audio_bytes = await _elevenlabs_tts(text)
+    audio_base64 = base64.b64encode(audio_bytes).decode() if audio_bytes else None
+    return {"audio_base64": audio_base64}
 
 
 # ---- Live inspection -----------------------------------------------------

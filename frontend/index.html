@@ -118,6 +118,16 @@ input,select,textarea{font-family:inherit}
 /* ------------------------------------------------------------------ */
 .machine-section-title{font-size:.72rem;font-weight:700;text-transform:uppercase;
   letter-spacing:1px;color:var(--text-dim);margin-bottom:12px}
+.fleet-section{margin-bottom:24px}
+.fleet-section h2{font-size:.9rem;font-weight:700;margin-bottom:12px;color:var(--text);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
+.fleet-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:12px}
+.fleet-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
+  padding:16px;transition:all .3s ease}
+.fleet-card-name{font-weight:700;font-size:.95rem;margin-bottom:6px;display:flex;align-items:center;gap:8px}
+.fleet-card-health{font-size:.75rem;color:var(--text-dim);margin-bottom:2px}
+.fleet-card-date{font-size:.7rem;color:var(--text-dim);margin-bottom:10px}
+.fleet-card .btn{width:100%;padding:8px 12px;font-size:.8rem}
+.machine-section-title{font-size:.8rem;font-weight:700;color:var(--text-dim);margin-bottom:10px;text-transform:uppercase;letter-spacing:.5px}
 #machine-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px}
 .machine-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
   padding:20px 16px;text-align:center;cursor:pointer;transition:all .3s ease;position:relative}
@@ -502,6 +512,8 @@ input,select,textarea{font-family:inherit}
   background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border)}
 .an-section-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;
   color:var(--text-dim);margin-bottom:12px}
+.an-machine-select{background:var(--surface2);border:1px solid var(--border);border-radius:var(--radius);
+  color:var(--text);padding:8px 12px;font-size:.85rem;min-width:180px}
 .an-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
   padding:22px;overflow:hidden}
 
@@ -967,14 +979,24 @@ input,select,textarea{font-family:inherit}
     </div>
   </div>
 
+  <div class="fleet-section" id="fleet-section">
+    <h2>
+      <span>My Fleet</span>
+      <button type="button" class="btn btn-secondary" id="btn-add-machine" style="padding:6px 14px;font-size:.8rem">+ Add Machine</button>
+    </h2>
+    <div class="fleet-cards" id="fleet-cards"></div>
+  </div>
+
+  <div id="machine-selector-block" style="display:none">
+    <p class="machine-section-title">Select a machine to add to your fleet</p>
+    <div id="machine-grid"></div>
+  </div>
+
   <!-- Hidden select for JS compatibility -->
-  <div class="field">
+  <div class="field" style="display:none">
     <label for="machine-select">Select Machine</label>
     <select id="machine-select"><option value="">Choose a machine…</option></select>
   </div>
-
-  <p class="machine-section-title">Select a Machine</p>
-  <div id="machine-grid"></div>
 
   <div class="checklist-header" id="checklist-header" style="display:none">
     <h2>Components</h2>
@@ -1113,6 +1135,13 @@ input,select,textarea{font-family:inherit}
 
   <div id="analytics-content" style="display:none">
 
+    <div class="an-machine-row" style="margin-bottom:16px">
+      <label for="analytics-machine-select" class="an-section-label">Machine</label>
+      <select id="analytics-machine-select" class="an-machine-select">
+        <option value="">— Select machine —</option>
+      </select>
+    </div>
+
     <!-- Row 1: stat cards -->
     <div class="an-stats-row">
       <div class="an-card an-stat">
@@ -1175,6 +1204,12 @@ input,select,textarea{font-family:inherit}
       </div>
       <div class="an-card chart-card">
         <h3>Component Health Timeline</h3>
+        <div style="margin-bottom:8px">
+          <label for="timeline-component-select" class="an-section-label">Component</label>
+          <select id="timeline-component-select" class="an-machine-select" style="max-width:220px">
+            <option value="">All Components</option>
+          </select>
+        </div>
         <canvas id="timeline-chart" style="max-height:300px"></canvas>
         <p id="timeline-note" style="font-size:.72rem;color:var(--text-dim);margin-top:8px;display:none">
           Showing historical data from past sessions.
@@ -1256,10 +1291,103 @@ let cameraCaptureMode = 'photo';  // 'photo' | 'video'
 let mediaRecorder = null;
 let recordedChunks = [];
 let recordedBlob = null;
+let pastInspectionCache = [];  // all inspection results fetched from GET /inspect/results (persists across machine switch)
+let userFleet = [];  // machine names in user's fleet (from GET /fleet + localStorage)
+let addMachineMode = false;   // when true, machine grid click adds to fleet and selects
+let analyticsMachine = '';    // selected machine in Analytics tab (from fleet)
+let timelineComponentFilter = '';  // '' = all components, or component name for timeline chart
 
 let pendingVerifyEmail = '';
 function getInspectorId() { return localStorage.getItem('catalyze_inspector') || ''; }
 function getInspectorIdForApi() { return localStorage.getItem('catalyze_user_id') || getInspectorId(); }
+
+const FLEET_STORAGE_KEY = 'catalyze_fleet';
+
+function loadFleetFromStorage() {
+  try {
+    const raw = localStorage.getItem(FLEET_STORAGE_KEY);
+    if (raw) userFleet = JSON.parse(raw);
+    else userFleet = [];
+  } catch { userFleet = []; }
+}
+
+function persistFleet() {
+  localStorage.setItem(FLEET_STORAGE_KEY, JSON.stringify(userFleet));
+  renderFleetSection();
+}
+
+async function saveFleetToBackend() {
+  const inspectorId = getInspectorIdForApi();
+  if (!inspectorId) return;
+  try {
+    await fetch('/fleet/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ inspector_id: inspectorId, machines: userFleet }),
+    });
+  } catch (_) { /* ignore */ }
+}
+
+function addToFleet(name) {
+  if (!name || !machines[name] || userFleet.includes(name)) return;
+  userFleet.push(name);
+  persistFleet();
+  saveFleetToBackend();
+}
+
+function removeFromFleet(name) {
+  userFleet = userFleet.filter(m => m !== name);
+  persistFleet();
+  saveFleetToBackend();
+}
+
+function getMachineHealthScore(machineName) {
+  const forMachine = pastInspectionCache.filter(r => (r.machine || '') === machineName);
+  if (!forMachine.length) return null;
+  const map = { PASS: 100, MONITOR: 50, FAIL: 0 };
+  let sum = 0, count = 0;
+  forMachine.forEach(r => {
+    const s = (r.status || '').toUpperCase();
+    if (s in map) { sum += map[s]; count++; }
+  });
+  return count ? Math.round(sum / count) : null;
+}
+
+function getMachineLastInspectionDate(machineName) {
+  const forMachine = pastInspectionCache.filter(r => (r.machine || '') === machineName);
+  if (!forMachine.length) return null;
+  let latest = '';
+  forMachine.forEach(r => { const d = r.date || r.timestamp || ''; if (d > latest) latest = d; });
+  if (!latest) return null;
+  return new Date(latest).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function renderFleetSection() {
+  const container = document.getElementById('fleet-cards');
+  if (!container) return;
+  if (userFleet.length === 0) {
+    container.innerHTML = '<p style="font-size:.85rem;color:var(--text-dim)">No machines in your fleet. Click Add Machine to get started.</p>';
+    return;
+  }
+  container.innerHTML = userFleet.map(name => {
+    const health = getMachineHealthScore(name);
+    const date = getMachineLastInspectionDate(name);
+    const healthStr = health != null ? health + '%' : '—';
+    const healthColor = health != null ? (health >= 80 ? 'var(--pass)' : health >= 50 ? 'var(--monitor)' : 'var(--fail)') : 'var(--text-dim)';
+    return `<div class="fleet-card">
+      <div class="fleet-card-name">${getMachineIcon(name)} ${name}</div>
+      <div class="fleet-card-health" style="color:${healthColor}">Health: ${healthStr}</div>
+      <div class="fleet-card-date">Last: ${date || 'Never'}</div>
+      <button type="button" class="btn btn-primary fleet-inspect-btn" data-machine="${esc(name)}">Inspect</button>
+    </div>`;
+  }).join('');
+  container.querySelectorAll('.fleet-inspect-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const machine = btn.dataset.machine;
+      if (machine) { selectMachine(machine); document.getElementById('machine-selector-block').style.display = 'none'; addMachineMode = false; }
+    });
+  });
+}
 
 async function saveInspectionToBackend(data) {
   const inspectorId = getInspectorIdForApi();
@@ -1291,6 +1419,13 @@ document.addEventListener('DOMContentLoaded', async () => {
   initTabs();
   initStatsCounters();
   await loadMachines();
+  loadFleetFromStorage();
+  renderFleetSection();
+  document.getElementById('btn-add-machine').addEventListener('click', () => {
+    addMachineMode = true;
+    document.getElementById('machine-selector-block').style.display = 'block';
+    renderMachineGrid();
+  });
   initSignIn();
   initCamera();
   initPartsID();
@@ -1346,43 +1481,58 @@ function showApp() {
   loadPastResultsAndRestore();
 }
 
+function applyResultsForMachine(machineName) {
+  if (!machineName || !pastInspectionCache.length) return;
+  const forMachine = pastInspectionCache.filter(r => (r.machine || '') === machineName);
+  const byComponent = {};
+  forMachine.forEach(r => {
+    const comp = r.component;
+    if (!comp) return;
+    const existing = byComponent[comp];
+    const date = r.date || r.timestamp || '';
+    if (!existing || date > (existing.date || existing.timestamp || ''))
+      byComponent[comp] = r;
+  });
+  const sorted = Object.values(byComponent).sort((a, b) => {
+    const da = a.date || a.timestamp || '';
+    const db = b.date || b.timestamp || '';
+    return da.localeCompare(db);
+  });
+  sorted.forEach(r => {
+    const comp = r.component;
+    results[comp] = r;
+    if (!inspectionOrder.includes(comp)) inspectionOrder.push(comp);
+  });
+  Object.keys(results).forEach(comp => updateComponentUI(comp, results[comp]));
+  updateProgress();
+}
+
 async function loadPastResultsAndRestore() {
   const inspectorId = getInspectorIdForApi();
   if (!inspectorId) return;
   const lastMachine = localStorage.getItem('catalyze_last_machine') || '';
-  if (lastMachine) selectMachine(lastMachine);
 
   try {
-    const resp = await fetch('/inspect/results?inspector_id=' + encodeURIComponent(inspectorId));
-    if (!resp.ok) return;
-    const data = await resp.json();
-    const list = data.results || [];
-    if (list.length === 0 || !currentMachine) return;
-
-    const forMachine = list.filter(r => (r.machine || '') === currentMachine);
-    const byComponent = {};
-    forMachine.forEach(r => {
-      const comp = r.component;
-      if (!comp) return;
-      const existing = byComponent[comp];
-      const date = r.date || r.timestamp || '';
-      if (!existing || date > (existing.date || existing.timestamp || ''))
-        byComponent[comp] = r;
-    });
-    const sorted = Object.values(byComponent).sort((a, b) => {
-      const da = a.date || a.timestamp || '';
-      const db = b.date || b.timestamp || '';
-      return da.localeCompare(db);
-    });
-
-    sorted.forEach(r => {
-      const comp = r.component;
-      results[comp] = r;
-      if (!inspectionOrder.includes(comp)) inspectionOrder.push(comp);
-    });
-    Object.keys(results).forEach(comp => updateComponentUI(comp, results[comp]));
-    updateProgress();
+    const [resultsResp, fleetResp] = await Promise.all([
+      fetch('/inspect/results?inspector_id=' + encodeURIComponent(inspectorId)),
+      fetch('/fleet?inspector_id=' + encodeURIComponent(inspectorId)),
+    ]);
+    if (resultsResp.ok) {
+      const data = await resultsResp.json();
+      pastInspectionCache = data.results || [];
+    }
+    if (fleetResp.ok) {
+      const fleetData = await fleetResp.json();
+      if (Array.isArray(fleetData.machines) && fleetData.machines.length) {
+        userFleet = fleetData.machines;
+        persistFleet();
+      }
+    }
   } catch (_) { /* ignore */ }
+
+  renderFleetSection();
+  if (lastMachine) selectMachine(lastMachine);
+  else if (pastInspectionCache.length) applyResultsForMachine(currentMachine);
 }
 
 function showLanding() {
@@ -1676,6 +1826,9 @@ function initSignIn() {
     pill.textContent = '';
     results = {};
     inspectionOrder = [];
+    pastInspectionCache = [];
+    userFleet = [];
+    localStorage.removeItem(FLEET_STORAGE_KEY);
     currentMachine = '';
     document.getElementById('component-list').innerHTML = '';
     const header = document.getElementById('checklist-header');
@@ -1717,6 +1870,16 @@ function initTabs() {
       if (btn.dataset.tab !== 'live') stopLive();
       if (btn.dataset.tab === 'analytics') renderAnalytics();
     });
+  });
+  document.getElementById('analytics-machine-select').addEventListener('change', function() {
+    analyticsMachine = this.value || '';
+    timelineComponentFilter = '';
+    renderAnalytics();
+  });
+  document.getElementById('timeline-component-select').addEventListener('change', function() {
+    timelineComponentFilter = this.value || '';
+    if (timelineChart && document.getElementById('tab-analytics').classList.contains('active'))
+      renderAnalytics();
   });
 }
 
@@ -1763,9 +1926,19 @@ function renderMachineGrid() {
       <span class="mc-icon">${getMachineIcon(name)}</span>
       <div class="mc-name">${name}</div>
       <div class="mc-count">${machines[name].length} components</div>
-      <button class="mc-select-btn">${name === currentMachine ? 'Selected' : 'Select'}</button>
+      <button class="mc-select-btn">${name === currentMachine ? 'Selected' : addMachineMode ? 'Add to Fleet' : 'Select'}</button>
     `;
-    card.addEventListener('click', () => selectMachine(name));
+    card.addEventListener('click', () => {
+      if (addMachineMode) {
+        addToFleet(name);
+        selectMachine(name);
+        document.getElementById('machine-selector-block').style.display = 'none';
+        addMachineMode = false;
+        renderMachineGrid();
+      } else {
+        selectMachine(name);
+      }
+    });
     grid.appendChild(card);
   });
 }
@@ -1794,6 +1967,7 @@ function selectMachine(name) {
   machines[name].forEach(comp => {
     list.appendChild(createComponentCard(comp));
   });
+  applyResultsForMachine(name);
   updateProgress();
 }
 
@@ -1888,6 +2062,7 @@ function updateProgress() {
   updateHeroHealth();
   updateSidebar();
   updateActivityFeed();
+  renderFleetSection();
 }
 
 function updateHeroHealth() {
@@ -2131,6 +2306,7 @@ async function analyzeVideo(videoBlob, comp) {
     if (!inspectionOrder.includes(comp)) inspectionOrder.push(comp);
     updateComponentUI(comp, data);
     saveInspectionToBackend(data);
+    pushToInspectionCache(currentMachine, comp, data);
     toast(`${comp}: ${data.status}`, data.status === 'FAIL' ? 'error' : 'success');
   } catch (e) {
     toast('Analysis failed: ' + e.message, 'error');
@@ -2154,12 +2330,19 @@ async function analyzeImage(blob, comp) {
     if (!inspectionOrder.includes(comp)) inspectionOrder.push(comp);
     updateComponentUI(comp, data);
     saveInspectionToBackend(data);
+    pushToInspectionCache(currentMachine, comp, data);
     toast(`${comp}: ${data.status}`, data.status === 'FAIL' ? 'error' : 'success');
   } catch (e) {
     toast('Analysis failed: ' + e.message, 'error');
   } finally {
     hideLoader();
   }
+}
+
+function pushToInspectionCache(machine, component, data) {
+  const record = { machine, component, ...data, timestamp: data.timestamp || new Date().toISOString() };
+  pastInspectionCache = pastInspectionCache.filter(r => !(r.machine === machine && r.component === component));
+  pastInspectionCache.push(record);
 }
 
 /* ================================================================== */
@@ -2215,6 +2398,7 @@ async function analyzeVoice(comp, text) {
     if (!inspectionOrder.includes(comp)) inspectionOrder.push(comp);
     updateComponentUI(comp, data);
     saveInspectionToBackend(data);
+    pushToInspectionCache(currentMachine, comp, data);
     toast(`${comp}: ${data.status}`, data.status === 'FAIL' ? 'error' : 'success');
   } catch (e) {
     toast('Voice analysis failed: ' + e.message, 'error');
@@ -2387,12 +2571,45 @@ function statusToScore(s) {
   return null;
 }
 
+function getResultsForMachine(machineName) {
+  if (!machineName || !pastInspectionCache.length) return { entries: [], totalComps: 0 };
+  const forMachine = pastInspectionCache.filter(r => (r.machine || '') === machineName);
+  const byComponent = {};
+  forMachine.forEach(r => {
+    const comp = r.component;
+    if (!comp) return;
+    const existing = byComponent[comp];
+    const date = r.date || r.timestamp || '';
+    if (!existing || date > (existing.date || existing.timestamp || ''))
+      byComponent[comp] = r;
+  });
+  const entries = Object.entries(byComponent);
+  const totalComps = machines[machineName]?.length || 0;
+  return { entries, totalComps };
+}
+
+function updateAnalyticsMachineSelect() {
+  const sel = document.getElementById('analytics-machine-select');
+  if (!sel) return;
+  const list = userFleet.length ? userFleet : (currentMachine ? [currentMachine] : []);
+  sel.innerHTML = '<option value="">— Select machine —</option>' +
+    list.map(m => `<option value="${esc(m)}" ${m === analyticsMachine ? 'selected' : ''}>${m}</option>`).join('');
+  if (!analyticsMachine && list.length) analyticsMachine = list[0];
+}
+
 function renderAnalytics() {
   Chart.defaults.font.family = "'Inter', system-ui, -apple-system, sans-serif";
   Chart.defaults.font.size = 13;
   Chart.defaults.color = '#888';
 
-  const entries = Object.entries(results);
+  const machine = analyticsMachine || currentMachine;
+  const source = machine && (machine !== currentMachine || Object.keys(results).length === 0)
+    ? getResultsForMachine(machine) : { entries: Object.entries(results), totalComps: machines[currentMachine]?.length || 0 };
+  const entries = source.entries;
+  const totalComps = source.totalComps;
+
+  updateAnalyticsMachineSelect();
+
   const empty = document.getElementById('analytics-empty');
   const content = document.getElementById('analytics-content');
 
@@ -2424,7 +2641,6 @@ function renderAnalytics() {
   // Stat cards
   document.getElementById('an-total').textContent = entries.length;
   document.getElementById('an-pass-rate').textContent = scorable ? Math.round(passCt / scorable * 100) + '%' : '—';
-  const totalComps = machines[currentMachine]?.length || 0;
   document.getElementById('an-progress').textContent = totalComps ? Math.round(entries.length / totalComps * 100) + '%' : '0%';
 
   // Health ring
@@ -2497,18 +2713,31 @@ function renderAnalytics() {
       },
     });
 
-    renderSessionTimeline();
-    fetchAndRenderTimeline();
+    const analyticsResults = Object.fromEntries(entries);
+    const analyticsOrder = entries.map(([c]) => c);
+    const timelineOrder = timelineComponentFilter
+      ? analyticsOrder.filter(c => c === timelineComponentFilter)
+      : analyticsOrder;
+    const compSelect = document.getElementById('timeline-component-select');
+    if (compSelect) {
+      compSelect.innerHTML = '<option value="">All Components</option>' +
+        analyticsOrder.map(c => `<option value="${esc(c)}" ${c === timelineComponentFilter ? 'selected' : ''}>${c}</option>`).join('');
+    }
+    renderSessionTimeline(analyticsResults, timelineOrder);
+    fetchAndRenderTimeline(machine, analyticsResults, timelineOrder);
   });
 }
 
-function renderSessionTimeline() {
-  if (inspectionOrder.length < 1) return;
+function renderSessionTimeline(resultsOverride, orderOverride) {
+  const res = resultsOverride != null ? resultsOverride : results;
+  const order = orderOverride != null ? orderOverride : inspectionOrder;
+  const orderFiltered = timelineComponentFilter ? order.filter(c => c === timelineComponentFilter) : order;
+  if (orderFiltered.length < 1) return;
 
-  const labels = inspectionOrder.map((_, i) => `#${i + 1}`);
-  const datasets = inspectionOrder.map((comp, ci) => ({
+  const labels = orderFiltered.map((_, i) => `#${i + 1}`);
+  const datasets = orderFiltered.map((comp, ci) => ({
     label: comp.length > 16 ? comp.slice(0, 14) + '…' : comp,
-    data: inspectionOrder.map(c => c === comp ? statusToScore(results[comp]?.status) : null),
+    data: orderFiltered.map(c => c === comp ? statusToScore(res[comp]?.status) : null),
     borderColor: LINE_COLORS[ci % LINE_COLORS.length],
     backgroundColor: LINE_COLORS[ci % LINE_COLORS.length],
     tension: 0.3,
@@ -2525,15 +2754,17 @@ function renderSessionTimeline() {
   });
 }
 
-async function fetchAndRenderTimeline() {
-  if (!currentMachine) return;
-  const inspectorId = getInspectorId();
-  const comps = Object.keys(results);
-  if (comps.length === 0) return;
+async function fetchAndRenderTimeline(machineOverride, resultsOverride, orderOverride) {
+  const machine = machineOverride != null ? machineOverride : currentMachine;
+  const res = resultsOverride != null ? resultsOverride : results;
+  const order = orderOverride != null ? orderOverride : Object.keys(res);
+  const comps = timelineComponentFilter ? order.filter(c => c === timelineComponentFilter) : order;
+  if (!machine || comps.length === 0) return;
+  const inspectorId = getInspectorIdForApi();
 
   const allRecords = {};
   const fetches = comps.map(async comp => {
-    const qs = new URLSearchParams({ machine: currentMachine, component: comp, limit: '20' });
+    const qs = new URLSearchParams({ machine, component: comp, limit: '20' });
     if (inspectorId) qs.set('inspector_id', inspectorId);
     try {
       const resp = await fetch('/history?' + qs);
@@ -2548,7 +2779,6 @@ async function fetchAndRenderTimeline() {
   const hasHistory = Object.values(allRecords).some(r => r.length > 0);
   if (!hasHistory) return;
 
-  // Build unified time axis from all records + current session
   const allDates = new Set();
   Object.values(allRecords).forEach(recs => recs.forEach(r => {
     if (r.date) allDates.add(r.date);
@@ -2566,7 +2796,7 @@ async function fetchAndRenderTimeline() {
     const history = allRecords[comp] || [];
     const dateMap = {};
     history.forEach(r => { if (r.date) dateMap[r.date] = statusToScore(r.status); });
-    dateMap[now] = statusToScore(results[comp]?.status);
+    dateMap[now] = statusToScore(res[comp]?.status);
 
     return {
       label: comp.length > 16 ? comp.slice(0, 14) + '…' : comp,
@@ -2650,26 +2880,25 @@ function toggleLiveVoice() {
   }
 }
 
-function speakLiveResult(data) {
-  if (liveVoiceMuted || !window.speechSynthesis) return;
-  const component = (data.component || 'Unknown').trim();
-  const status = (data.status || 'UNKNOWN').toUpperCase();
+async function speakLiveResult(data) {
+  if (liveVoiceMuted) return;
   const observation = (data.observation || '').trim();
-  const key = component + '|' + status + '|' + observation;
+  if (!observation) return;
+  const key = (data.component || '') + '|' + (data.status || '') + '|' + observation;
   if (key === lastLiveSpokenKey) return;
   lastLiveSpokenKey = key;
 
-  const text = observation
-    ? `${component}: ${status}. ${observation}`
-    : `${component}: ${status}.`;
-  window.speechSynthesis.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = 0.95;
-  u.pitch = 1;
-  const voices = window.speechSynthesis.getVoices();
-  const en = voices.find(v => v.lang.startsWith('en'));
-  if (en) u.voice = en;
-  window.speechSynthesis.speak(u);
+  try {
+    const resp = await fetch('/tts/speak', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: observation }),
+    });
+    if (!resp.ok) return;
+    const json = await resp.json();
+    const b64 = json.audio_base64;
+    if (b64) new Audio('data:audio/mp3;base64,' + b64).play();
+  } catch (_) { /* ignore */ }
 }
 
 async function startLive() {
