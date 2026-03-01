@@ -466,28 +466,52 @@ input,select,textarea{font-family:inherit}
 /* ------------------------------------------------------------------ */
 /*  Analytics                                                         */
 /* ------------------------------------------------------------------ */
-.analytics-empty{text-align:center;padding:48px 0;color:var(--text-dim);
+.analytics-empty{text-align:center;padding:56px 20px;color:var(--text-dim);
   background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border)}
-.health-score-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
-  padding:32px;text-align:center;margin-bottom:20px;position:relative;overflow:hidden}
-.health-score-card::before{content:'';position:absolute;inset:0;
-  background:radial-gradient(circle at 50% 30%,rgba(255,205,17,.04),transparent 60%);pointer-events:none}
-.health-score-value{font-size:3.6rem;font-weight:900;line-height:1;position:relative}
-.health-score-label{font-size:.7rem;text-transform:uppercase;letter-spacing:1.2px;
-  color:var(--text-dim);margin-top:6px;font-weight:700}
-.analytics-layout{display:grid;grid-template-columns:1fr 280px;gap:20px}
-.analytics-main{min-width:0}
-.chart-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
-  padding:20px;margin-bottom:16px}
-.chart-card h3{font-size:.75rem;text-transform:uppercase;letter-spacing:1px;
+.an-section-label{font-size:.7rem;font-weight:700;text-transform:uppercase;letter-spacing:1px;
+  color:var(--text-dim);margin-bottom:12px}
+.an-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
+  padding:22px;overflow:hidden}
+
+/* Row 1: stat cards */
+.an-stats-row{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:20px}
+.an-stat{display:flex;align-items:center;gap:14px}
+.an-stat-icon{width:44px;height:44px;border-radius:var(--radius);display:flex;align-items:center;
+  justify-content:center;font-size:1.2rem;flex-shrink:0}
+.an-stat-icon.pass{background:rgba(34,197,94,.1);color:var(--pass)}
+.an-stat-icon.cat{background:rgba(255,205,17,.1);color:var(--cat)}
+.an-stat-icon.blue{background:rgba(59,130,246,.1);color:#3b82f6}
+.an-stat-val{font-size:1.5rem;font-weight:900;line-height:1}
+.an-stat-lbl{font-size:.7rem;color:var(--text-dim);margin-top:2px;text-transform:uppercase;
+  letter-spacing:.5px;font-weight:600}
+
+/* Row 2: gauge center, donut left, activity right */
+.an-mid-row{display:grid;grid-template-columns:1fr 1.2fr 1fr;gap:14px;margin-bottom:20px}
+.health-score-card{text-align:center;position:relative;display:flex;flex-direction:column;
+  align-items:center;justify-content:center;min-height:260px}
+.health-score-card::before{content:'';position:absolute;inset:0;border-radius:var(--radius-lg);
+  background:radial-gradient(circle at 50% 40%,rgba(255,205,17,.05),transparent 65%);pointer-events:none}
+.health-score-ring{position:relative;width:140px;height:140px;margin:0 auto 12px}
+.health-score-ring svg{width:100%;height:100%;transform:rotate(-90deg)}
+.health-score-ring .ring-bg{fill:none;stroke:var(--border);stroke-width:8}
+.health-score-ring .ring-fg{fill:none;stroke-width:8;stroke-linecap:round;
+  transition:stroke-dashoffset .8s ease,stroke .3s ease}
+.health-score-inner{position:absolute;inset:0;display:flex;flex-direction:column;
+  align-items:center;justify-content:center}
+.health-score-value{font-size:2.2rem;font-weight:900;line-height:1}
+.health-score-label{font-size:.65rem;text-transform:uppercase;letter-spacing:1px;
+  color:var(--text-dim);margin-top:4px;font-weight:700}
+
+/* Chart cards */
+.chart-card h3{font-size:.7rem;text-transform:uppercase;letter-spacing:1px;
   color:var(--text-dim);margin-bottom:14px;font-weight:700}
 .chart-card canvas{max-height:260px}
-.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+
+/* Row 3: bar + timeline */
+.an-bottom-row{display:grid;grid-template-columns:1.3fr 1fr;gap:14px}
 
 /* Activity feed */
-.activity-feed{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);
-  padding:20px;height:fit-content;position:sticky;top:80px}
-.activity-feed h3{font-size:.75rem;text-transform:uppercase;letter-spacing:1px;
+.activity-feed h3{font-size:.7rem;text-transform:uppercase;letter-spacing:1px;
   color:var(--text-dim);margin-bottom:14px;font-weight:700}
 .activity-item{display:flex;gap:10px;padding:10px 0;border-bottom:1px solid rgba(255,255,255,.03);
   align-items:flex-start}
@@ -496,9 +520,10 @@ input,select,textarea{font-family:inherit}
 .activity-dot.pass{background:var(--pass)}
 .activity-dot.monitor{background:var(--monitor)}
 .activity-dot.fail{background:var(--fail)}
+.activity-dot.invalid{background:#6B6E7B}
 .activity-info{flex:1;min-width:0}
 .activity-info .ai-comp{font-size:.8rem;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.activity-info .ai-time{font-size:.7rem;color:var(--text-dim)}
+.activity-info .ai-time{font-size:.68rem;color:var(--text-dim)}
 
 /* ------------------------------------------------------------------ */
 /*  Live Inspect                                                      */
@@ -545,18 +570,19 @@ input,select,textarea{font-family:inherit}
   .tabs{position:static;transform:none;display:flex;padding:8px 12px;gap:4px;
     width:100%;overflow-x:auto}
   #machine-grid{grid-template-columns:repeat(2,1fr)}
-  .analytics-layout{grid-template-columns:1fr}
+  .an-mid-row{grid-template-columns:1fr}
+  .an-bottom-row{grid-template-columns:1fr}
 }
 @media(max-width:640px){
   #component-list{grid-template-columns:1fr}
   #machine-grid{grid-template-columns:1fr}
   .welcome-banner{flex-direction:column;text-align:center}
+  .an-stats-row{grid-template-columns:1fr}
 }
 @media(max-width:480px){
   html{font-size:14px}
   .summary-grid{grid-template-columns:repeat(2,1fr)}
   .report-table{font-size:.78rem}
-  .charts-row{grid-template-columns:1fr}
   .tab-btn{font-size:.62rem;padding:6px 10px}
 }
 @media print{
@@ -1045,40 +1071,76 @@ input,select,textarea{font-family:inherit}
   </div>
 
   <div id="analytics-content" style="display:none">
-    <div class="health-score-card">
-      <div class="health-score-value" id="health-score">—</div>
-      <div class="health-score-label">Machine Health Score</div>
+
+    <!-- Row 1: stat cards -->
+    <div class="an-stats-row">
+      <div class="an-card an-stat">
+        <div class="an-stat-icon blue">📋</div>
+        <div>
+          <div class="an-stat-val" id="an-total">0</div>
+          <div class="an-stat-lbl">Total Inspections</div>
+        </div>
+      </div>
+      <div class="an-card an-stat">
+        <div class="an-stat-icon pass">✓</div>
+        <div>
+          <div class="an-stat-val" id="an-pass-rate">0%</div>
+          <div class="an-stat-lbl">Pass Rate</div>
+        </div>
+      </div>
+      <div class="an-card an-stat">
+        <div class="an-stat-icon cat">⚙</div>
+        <div>
+          <div class="an-stat-val" id="an-progress">0%</div>
+          <div class="an-stat-lbl">Machine Progress</div>
+        </div>
+      </div>
     </div>
 
-    <div class="analytics-layout">
-      <div class="analytics-main">
-        <div class="charts-row">
-          <div class="chart-card">
-            <h3>Status Breakdown</h3>
-            <canvas id="donut-chart"></canvas>
-          </div>
-          <div class="chart-card">
-            <h3>Results by Component</h3>
-            <canvas id="bar-chart"></canvas>
-          </div>
-        </div>
+    <!-- Row 2: donut | health gauge | activity -->
+    <div class="an-mid-row">
+      <div class="an-card chart-card">
+        <h3>Status Breakdown</h3>
+        <canvas id="donut-chart"></canvas>
+      </div>
 
-        <div class="chart-card">
-          <h3>Component Health Timeline</h3>
-          <canvas id="timeline-chart" style="max-height:300px"></canvas>
-          <p id="timeline-note" style="font-size:.72rem;color:var(--text-dim);margin-top:8px;display:none">
-            Showing historical data from past sessions via Supermemory.
-          </p>
+      <div class="an-card health-score-card">
+        <div class="health-score-ring">
+          <svg viewBox="0 0 140 140">
+            <circle class="ring-bg" cx="70" cy="70" r="60"/>
+            <circle class="ring-fg" id="health-ring-fg" cx="70" cy="70" r="60"
+              stroke-dasharray="376.99" stroke-dashoffset="376.99"/>
+          </svg>
+          <div class="health-score-inner">
+            <div class="health-score-value" id="health-score">—</div>
+            <div class="health-score-label">Health Score</div>
+          </div>
         </div>
       </div>
 
-      <div class="activity-feed" id="activity-feed">
+      <div class="an-card activity-feed" id="activity-feed">
         <h3>Recent Activity</h3>
         <div id="activity-list">
           <p style="font-size:.78rem;color:var(--text-dim)">No inspections yet.</p>
         </div>
       </div>
     </div>
+
+    <!-- Row 3: bar chart + timeline -->
+    <div class="an-bottom-row">
+      <div class="an-card chart-card">
+        <h3>Results by Component</h3>
+        <canvas id="bar-chart"></canvas>
+      </div>
+      <div class="an-card chart-card">
+        <h3>Component Health Timeline</h3>
+        <canvas id="timeline-chart" style="max-height:300px"></canvas>
+        <p id="timeline-note" style="font-size:.72rem;color:var(--text-dim);margin-top:8px;display:none">
+          Showing historical data from past sessions.
+        </p>
+      </div>
+    </div>
+
   </div>
 
 </section>
@@ -1733,7 +1795,7 @@ function updateActivityFeed() {
     const r = results[comp];
     if (!r) return;
     const s = (r.status || '').toUpperCase();
-    const cls = s === 'PASS' ? 'pass' : s === 'MONITOR' ? 'monitor' : s === 'FAIL' ? 'fail' : 'pending';
+    const cls = s === 'PASS' ? 'pass' : s === 'MONITOR' ? 'monitor' : s === 'FAIL' ? 'fail' : s === 'INVALID' ? 'invalid' : 'pending';
     const item = document.createElement('div');
     item.className = 'activity-item';
     item.innerHTML = `<span class="activity-dot ${cls}"></span>
@@ -2060,6 +2122,10 @@ function statusToScore(s) {
 }
 
 function renderAnalytics() {
+  Chart.defaults.font.family = "'Inter', system-ui, -apple-system, sans-serif";
+  Chart.defaults.font.size = 13;
+  Chart.defaults.color = '#888';
+
   const entries = Object.entries(results);
   const empty = document.getElementById('analytics-empty');
   const content = document.getElementById('analytics-content');
@@ -2076,40 +2142,60 @@ function renderAnalytics() {
   if (barChart) { barChart.destroy(); barChart = null; }
   if (timelineChart) { timelineChart.destroy(); timelineChart = null; }
 
-  let passCt = 0, monitorCt = 0, failCt = 0;
+  let passCt = 0, monitorCt = 0, failCt = 0, invalidCt = 0;
   entries.forEach(([, r]) => {
     const s = (r.status || '').toUpperCase();
     if (s === 'PASS') passCt++;
     else if (s === 'MONITOR') monitorCt++;
     else if (s === 'FAIL') failCt++;
+    else if (s === 'INVALID') invalidCt++;
   });
 
+  const scorable = passCt + monitorCt + failCt;
   const totalPts = passCt * 100 + monitorCt * 50;
-  const healthPct = entries.length > 0 ? Math.round(totalPts / entries.length) : 0;
+  const healthPct = scorable > 0 ? Math.round(totalPts / scorable) : 0;
+
+  // Stat cards
+  document.getElementById('an-total').textContent = entries.length;
+  document.getElementById('an-pass-rate').textContent = scorable ? Math.round(passCt / scorable * 100) + '%' : '—';
+  const totalComps = machines[currentMachine]?.length || 0;
+  document.getElementById('an-progress').textContent = totalComps ? Math.round(entries.length / totalComps * 100) + '%' : '0%';
+
+  // Health ring
   const scoreEl = document.getElementById('health-score');
   scoreEl.textContent = healthPct + '%';
-  scoreEl.style.color = healthPct >= 80 ? 'var(--pass)' : healthPct >= 50 ? 'var(--monitor)' : 'var(--fail)';
+  const ringColor = healthPct >= 80 ? 'var(--pass)' : healthPct >= 50 ? 'var(--monitor)' : 'var(--fail)';
+  scoreEl.style.color = ringColor;
+  const ringEl = document.getElementById('health-ring-fg');
+  const circumference = 2 * Math.PI * 60;
+  ringEl.style.stroke = healthPct >= 80 ? '#22c55e' : healthPct >= 50 ? '#eab308' : '#ef4444';
+  ringEl.style.strokeDashoffset = circumference - (circumference * healthPct / 100);
 
-  const chartColors = { pass: '#22c55e', monitor: '#eab308', fail: '#ef4444' };
+  const chartColors = { pass: '#22c55e', monitor: '#eab308', fail: '#ef4444', invalid: '#6B6E7B' };
+  const chartFont = { family: "'Inter', system-ui, sans-serif" };
 
   requestAnimationFrame(() => {
-    // Donut chart
+    // Donut chart — include INVALID as gray
+    const donutLabels = ['Pass', 'Monitor', 'Fail'];
+    const donutData = [passCt, monitorCt, failCt];
+    const donutBg = [chartColors.pass, chartColors.monitor, chartColors.fail];
+    if (invalidCt > 0) {
+      donutLabels.push('Invalid');
+      donutData.push(invalidCt);
+      donutBg.push(chartColors.invalid);
+    }
     const donutCanvas = _freshCanvas('donut-chart');
     donutChart = new Chart(donutCanvas, {
       type: 'doughnut',
       data: {
-        labels: ['Pass', 'Monitor', 'Fail'],
-        datasets: [{
-          data: [passCt, monitorCt, failCt],
-          backgroundColor: [chartColors.pass, chartColors.monitor, chartColors.fail],
-          borderColor: '#1e1e1e',
-          borderWidth: 3,
-        }],
+        labels: donutLabels,
+        datasets: [{ data: donutData, backgroundColor: donutBg, borderColor: '#12141C', borderWidth: 3 }],
       },
       options: {
         responsive: true, maintainAspectRatio: true, cutout: '65%',
+        layout: { padding: 10 },
         plugins: {
-          legend: { position: 'bottom', labels: { color: '#E8E9ED', padding: 16, font: { size: 12 } } },
+          legend: { position: 'bottom', labels: { color: '#E8E9ED', padding: 16, font: { size: 13, ...chartFont } } },
         },
       },
     });
@@ -2118,7 +2204,8 @@ function renderAnalytics() {
     const compNames = entries.map(([c]) => c.length > 14 ? c.slice(0, 12) + '…' : c);
     const colors = entries.map(([, r]) => {
       const s = (r.status || '').toUpperCase();
-      return s === 'PASS' ? chartColors.pass : s === 'MONITOR' ? chartColors.monitor : chartColors.fail;
+      return s === 'PASS' ? chartColors.pass : s === 'MONITOR' ? chartColors.monitor :
+             s === 'INVALID' ? chartColors.invalid : chartColors.fail;
     });
     const vals = entries.map(([, r]) => Math.round((r.confidence || 0) * 100));
 
@@ -2127,22 +2214,24 @@ function renderAnalytics() {
       type: 'bar',
       data: {
         labels: compNames,
-        datasets: [{ label: 'Confidence %', data: vals, backgroundColor: colors, borderRadius: 4, maxBarThickness: 32 }],
+        datasets: [{ label: 'Confidence %', data: vals, backgroundColor: colors, borderRadius: 6, maxBarThickness: 28 }],
       },
       options: {
         responsive: true, maintainAspectRatio: true, indexAxis: 'y',
+        layout: { padding: { top: 8, bottom: 8, left: 4, right: 12 } },
         scales: {
-          x: { min: 0, max: 100, ticks: { color: '#6B6E7B', callback: v => v + '%' }, grid: { color: '#1E2130' } },
-          y: { ticks: { color: '#E8E9ED', font: { size: 11 } }, grid: { display: false } },
+          x: { min: 0, max: 100,
+            ticks: { color: '#888', font: { size: 13, ...chartFont }, callback: v => v + '%' },
+            grid: { color: '#1E2130' },
+            title: { display: true, text: 'Confidence', color: '#fff', font: { size: 13, weight: 'bold', ...chartFont } },
+          },
+          y: { ticks: { color: '#E8E9ED', font: { size: 13, ...chartFont } }, grid: { display: false } },
         },
         plugins: { legend: { display: false } },
       },
     });
 
-    // Session timeline (current session data shown immediately)
     renderSessionTimeline();
-
-    // Also fetch historical data from Supermemory in background
     fetchAndRenderTimeline();
   });
 }
@@ -2236,26 +2325,29 @@ async function fetchAndRenderTimeline() {
 }
 
 function _timelineOptions() {
+  const chartFont = { family: "'Inter', system-ui, sans-serif" };
   return {
     responsive: true, maintainAspectRatio: true,
+    layout: { padding: { top: 8, bottom: 8, left: 4, right: 12 } },
     scales: {
       y: {
         min: 0, max: 100,
         ticks: {
-          color: '#6B6E7B', stepSize: 50,
+          color: '#888', stepSize: 50, font: { size: 13, ...chartFont },
           callback: v => v === 100 ? 'PASS' : v === 50 ? 'MONITOR' : 'FAIL',
         },
         grid: { color: '#1E2130' },
+        title: { display: true, text: 'Status', color: '#fff', font: { size: 13, weight: 'bold', ...chartFont } },
       },
       x: {
-        ticks: { color: '#E8E9ED', font: { size: 11 } },
+        ticks: { color: '#888', font: { size: 13, ...chartFont } },
         grid: { color: '#151720' },
       },
     },
     plugins: {
       legend: {
         position: 'bottom',
-        labels: { color: '#E8E9ED', padding: 12, font: { size: 11 }, boxWidth: 12 },
+        labels: { color: '#E8E9ED', padding: 14, font: { size: 13, ...chartFont }, boxWidth: 12 },
       },
     },
   };
