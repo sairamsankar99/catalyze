@@ -256,25 +256,57 @@ input,select,textarea{font-family:inherit}
 /*  Camera modal                                                      */
 /* ------------------------------------------------------------------ */
 .modal-overlay{position:fixed;inset:0;z-index:200;background:rgba(0,0,0,.95);
-  display:none;flex-direction:column;align-items:center;justify-content:center;padding:16px}
+  display:none;flex-direction:column;align-items:center;justify-content:center;padding:0}
 .modal-overlay.open{display:flex}
-.camera-container{position:relative;width:100%;max-width:720px;pointer-events:auto;
-  display:flex;flex-direction:column;align-items:center}
-.camera-container video{width:100%;min-height:70dvh;object-fit:cover;border-radius:var(--radius-lg);background:#000}
+.cam-viewfinder{position:relative;width:100%;max-width:100%;flex:1;min-height:0;
+  display:flex;flex-direction:column;align-items:stretch;padding:12px;max-height:85dvh}
+.cam-viewfinder-inner{position:relative;width:100%;flex:1;min-height:200px;
+  border-radius:var(--radius-lg);overflow:hidden;background:#000;
+  box-shadow:0 0 0 1px var(--border),0 12px 40px rgba(0,0,0,.5)}
+.cam-viewfinder-inner video,.cam-viewfinder-inner .cam-preview-video{width:100%;height:100%;
+  min-height:50vh;object-fit:cover;display:block}
+.cam-viewfinder-inner .cam-preview-video{max-height:70dvh}
+.cam-top-bar{position:absolute;top:0;left:0;right:0;padding:12px 16px;
+  background:linear-gradient(to bottom,rgba(0,0,0,.7),transparent);
+  display:flex;align-items:center;justify-content:space-between;z-index:5}
+.cam-mode-toggle{display:flex;border-radius:999px;background:rgba(0,0,0,.5);
+  padding:4px;border:1px solid rgba(255,255,255,.1)}
+.cam-mode-btn{padding:8px 20px;border-radius:999px;font-size:.8rem;font-weight:700;
+  text-transform:uppercase;letter-spacing:.5px;color:var(--text-dim);
+  background:transparent;border:none;cursor:pointer;transition:var(--transition)}
+.cam-mode-btn.active{background:var(--cat);color:#000}
+.cam-mode-btn:not(.active):hover{color:var(--text)}
+.close-cam{width:40px;height:40px;border-radius:50%;border:none;
+  background:rgba(0,0,0,.6);color:#fff;font-size:1.3rem;display:flex;
+  align-items:center;justify-content:center;cursor:pointer;transition:var(--transition)}
+.close-cam:hover{background:rgba(239,68,68,.9)}
+.cam-bottom-bar{position:absolute;bottom:0;left:0;right:0;padding:20px 16px;
+  background:linear-gradient(to top,rgba(0,0,0,.85),transparent);
+  display:flex;justify-content:center;align-items:center;gap:20px;z-index:5}
 .camera-container canvas{display:none}
-.camera-controls{display:flex;justify-content:center;align-items:center;gap:24px;margin-top:16px;width:100%}
-.shutter-btn{width:72px;height:72px;border-radius:50%;border:4px solid var(--cat);
-  background:transparent;position:relative;transition:var(--transition);flex-shrink:0}
-.shutter-btn::after{content:'';position:absolute;inset:6px;border-radius:50%;background:var(--cat);transition:var(--transition)}
+.shutter-btn{width:64px;height:64px;border-radius:50%;border:3px solid rgba(255,255,255,.9);
+  background:transparent;position:relative;transition:var(--transition);flex-shrink:0;cursor:pointer}
+.shutter-btn::after{content:'';position:absolute;inset:8px;border-radius:50%;background:rgba(255,255,255,.95);transition:var(--transition)}
 .shutter-btn:hover::after{background:#fff}
-.cam-cancel-btn{padding:10px 24px;border-radius:var(--radius);border:1px solid var(--border);
-  background:var(--surface2);color:var(--text);font-size:.85rem;font-weight:700;
-  text-transform:uppercase;letter-spacing:.5px;cursor:pointer;transition:var(--transition)}
-.cam-cancel-btn:hover{border-color:var(--fail);color:var(--fail)}
-.close-cam{position:absolute;top:12px;right:12px;width:44px;height:44px;border-radius:50%;
-  border:none;background:rgba(0,0,0,.75);color:#fff;font-size:1.4rem;display:flex;
-  align-items:center;justify-content:center;z-index:210;cursor:pointer}
-.close-cam:hover{background:rgba(239,68,68,.8)}
+.record-btn{width:64px;height:64px;border-radius:50%;border:none;
+  background:var(--fail);color:#fff;cursor:pointer;transition:var(--transition);
+  display:flex;align-items:center;justify-content:center;flex-shrink:0;
+  box-shadow:0 0 0 4px rgba(239,68,68,.3)}
+.record-btn:hover{background:#f87171;transform:scale(1.02)}
+.record-btn.recording{animation:record-pulse 1.2s ease-in-out infinite}
+@keyframes record-pulse{0%,100%{box-shadow:0 0 0 4px rgba(239,68,68,.5)}50%{box-shadow:0 0 0 8px rgba(239,68,68,.2)}}
+.record-btn .record-dot{width:24px;height:24px;border-radius:50%;background:#fff}
+.record-btn.stop-btn{border-radius:12px;width:56px;height:56px;background:#fff;color:#000}
+.record-btn.stop-btn .record-dot{display:none}
+.cam-cancel-btn,.cam-submit-btn{padding:12px 28px;border-radius:var(--radius);
+  font-size:.85rem;font-weight:700;text-transform:uppercase;letter-spacing:.5px;
+  cursor:pointer;transition:var(--transition);border:none}
+.cam-cancel-btn{background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.25)}
+.cam-cancel-btn:hover{background:rgba(255,255,255,.25)}
+.cam-submit-btn{background:var(--cat);color:#000}
+.cam-submit-btn:hover{background:#ffe066}
+.cam-controls-wrap{display:flex;justify-content:center;align-items:center;gap:20px;width:100%}
+.cam-preview-actions{display:flex;gap:16px;align-items:center;justify-content:center;flex-wrap:wrap}
 
 /* ------------------------------------------------------------------ */
 /*  Loader / spinner                                                  */
@@ -556,8 +588,13 @@ input,select,textarea{font-family:inherit}
 .live-pulse .dot{width:8px;height:8px;border-radius:50%;background:var(--fail);
   animation:pulse-dot 1.2s ease-in-out infinite}
 @keyframes pulse-dot{0%,100%{opacity:1}50%{opacity:.3}}
-.live-controls{display:flex;gap:12px;margin-top:16px}
+.live-controls{display:flex;gap:12px;margin-top:16px;align-items:center}
 .live-controls .btn{flex:1}
+.live-voice-btn{border:1px solid var(--border);background:var(--surface);color:var(--text);
+  padding:10px 14px;border-radius:var(--radius);cursor:pointer;display:inline-flex;
+  align-items:center;gap:8px;font-size:.85rem;font-weight:600}
+.live-voice-btn:hover{background:var(--surface2)}
+.live-voice-btn.muted{opacity:.7}
 .live-idle{text-align:center;padding:60px 20px;color:var(--text-dim);
   background:var(--surface);border-radius:var(--radius-lg);border:1px solid var(--border)}
 .live-idle p{margin-top:8px;font-size:.85rem}
@@ -1054,6 +1091,10 @@ input,select,textarea{font-family:inherit}
       </div>
     </div>
     <div class="live-controls">
+      <button type="button" class="live-voice-btn" id="btn-live-voice" title="Toggle voice feedback">
+        <span class="live-voice-icon">🔊</span>
+        <span class="live-voice-label">Voice on</span>
+      </button>
       <button class="btn btn-secondary" id="btn-stop-live">Stop</button>
     </div>
   </div>
@@ -1153,13 +1194,37 @@ input,select,textarea{font-family:inherit}
 <!--  Camera modal                                                    -->
 <!-- ================================================================ -->
 <div class="modal-overlay" id="camera-modal">
-  <div class="camera-container">
-    <button class="close-cam" id="close-cam" type="button" aria-label="Close camera">&times;</button>
-    <video id="camera-video" autoplay playsinline></video>
-    <canvas id="camera-canvas"></canvas>
-    <div class="camera-controls">
-      <button class="cam-cancel-btn" id="cam-cancel-btn" type="button">Cancel</button>
-      <button class="shutter-btn" id="shutter-btn"></button>
+  <div class="cam-viewfinder">
+    <div class="cam-viewfinder-inner">
+      <video id="camera-video" autoplay playsinline></video>
+      <video id="cam-preview-video" class="cam-preview-video" style="display:none" playsinline></video>
+      <canvas id="camera-canvas"></canvas>
+      <div class="cam-top-bar">
+        <div class="cam-mode-toggle">
+          <button type="button" class="cam-mode-btn active" id="cam-mode-photo" data-mode="photo">Photo</button>
+          <button type="button" class="cam-mode-btn" id="cam-mode-video" data-mode="video">Video</button>
+        </div>
+        <button class="close-cam" id="close-cam" type="button" aria-label="Close">&times;</button>
+      </div>
+      <div class="cam-bottom-bar">
+        <div id="cam-controls-photo" class="cam-controls-wrap">
+          <button class="cam-cancel-btn" id="cam-cancel-btn" type="button">Cancel</button>
+          <button class="shutter-btn" id="shutter-btn" type="button" aria-label="Capture"></button>
+        </div>
+        <div id="cam-controls-video-idle" class="cam-controls-wrap" style="display:none">
+          <button class="cam-cancel-btn" id="cam-video-cancel-btn" type="button">Cancel</button>
+          <button class="record-btn" id="cam-record-btn" type="button" title="Start recording"><span class="record-dot"></span></button>
+        </div>
+        <div id="cam-controls-video-rec" class="cam-controls-wrap" style="display:none">
+          <button class="record-btn stop-btn" id="cam-stop-record-btn" type="button" title="Stop recording">Stop</button>
+        </div>
+        <div id="cam-controls-video-preview" class="cam-controls-wrap" style="display:none">
+          <div class="cam-preview-actions">
+            <button class="cam-cancel-btn" id="cam-preview-cancel-btn" type="button">Cancel</button>
+            <button class="cam-submit-btn" id="cam-preview-submit-btn" type="button">Submit for analysis</button>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -1174,7 +1239,7 @@ input,select,textarea{font-family:inherit}
 <div class="toast" id="toast"></div>
 
 <!-- Hidden file input for component image upload -->
-<input type="file" id="comp-upload-input" accept="image/*" hidden>
+<input type="file" id="comp-upload-input" accept="image/*,video/*" hidden>
 
 <script>
 /* ================================================================== */
@@ -1187,6 +1252,10 @@ let inspectionOrder = [];  // tracks order of inspections for timeline
 let activeStream = null;   // camera MediaStream
 let captureTarget = null;  // which component the camera is open for
 let recognition = null;    // SpeechRecognition instance
+let cameraCaptureMode = 'photo';  // 'photo' | 'video'
+let mediaRecorder = null;
+let recordedChunks = [];
+let recordedBlob = null;
 
 let pendingVerifyEmail = '';
 function getInspectorId() { return localStorage.getItem('catalyze_inspector') || ''; }
@@ -1885,10 +1954,47 @@ function initCamera() {
   });
   document.getElementById('shutter-btn').addEventListener('click', capturePhoto);
   document.getElementById('cam-cancel-btn').addEventListener('click', closeCamera);
+  document.getElementById('cam-mode-photo').addEventListener('click', () => setCameraMode('photo'));
+  document.getElementById('cam-mode-video').addEventListener('click', () => setCameraMode('video'));
+  document.getElementById('cam-video-cancel-btn').addEventListener('click', closeCamera);
+  document.getElementById('cam-record-btn').addEventListener('click', startVideoRecording);
+  document.getElementById('cam-stop-record-btn').addEventListener('click', stopVideoRecording);
+  document.getElementById('cam-preview-cancel-btn').addEventListener('click', cancelVideoPreview);
+  document.getElementById('cam-preview-submit-btn').addEventListener('click', submitRecordedVideo);
+}
+
+function setCameraMode(mode) {
+  cameraCaptureMode = mode;
+  document.getElementById('cam-mode-photo').classList.toggle('active', mode === 'photo');
+  document.getElementById('cam-mode-video').classList.toggle('active', mode === 'video');
+  document.getElementById('cam-controls-photo').style.display = mode === 'photo' ? 'flex' : 'none';
+  const video = document.getElementById('camera-video');
+  const preview = document.getElementById('cam-preview-video');
+  if (mode === 'video' && recordedBlob) {
+    showVideoPreviewState();
+  } else {
+    document.getElementById('cam-controls-video-idle').style.display = mode === 'video' && !recordedBlob ? 'flex' : 'none';
+    document.getElementById('cam-controls-video-rec').style.display = 'none';
+    document.getElementById('cam-controls-video-preview').style.display = 'none';
+    video.style.display = 'block';
+    preview.style.display = 'none';
+  }
 }
 
 async function openCamera(comp) {
   captureTarget = comp;
+  recordedBlob = null;
+  recordedChunks = [];
+  cameraCaptureMode = 'photo';
+  document.getElementById('cam-mode-photo').classList.add('active');
+  document.getElementById('cam-mode-video').classList.remove('active');
+  document.getElementById('cam-controls-photo').style.display = 'flex';
+  document.getElementById('cam-controls-video-idle').style.display = 'none';
+  document.getElementById('cam-controls-video-rec').style.display = 'none';
+  document.getElementById('cam-controls-video-preview').style.display = 'none';
+  document.getElementById('camera-video').style.display = 'block';
+  document.getElementById('cam-preview-video').style.display = 'none';
+
   const modal = document.getElementById('camera-modal');
   const video = document.getElementById('camera-video');
   try {
@@ -1903,15 +2009,19 @@ async function openCamera(comp) {
 }
 
 function closeCamera() {
+  stopVideoRecording();
   const modal = document.getElementById('camera-modal');
   const video = document.getElementById('camera-video');
+  const preview = document.getElementById('cam-preview-video');
   if (activeStream) {
     activeStream.getTracks().forEach(track => track.stop());
     activeStream = null;
   }
   video.srcObject = null;
+  preview.src = '';
+  recordedBlob = null;
+  recordedChunks = [];
   modal.classList.remove('open');
-  video.srcObject = null;
 }
 
 async function capturePhoto() {
@@ -1921,11 +2031,72 @@ async function capturePhoto() {
   canvas.height = video.videoHeight;
   canvas.getContext('2d').drawImage(video, 0, 0);
   closeCamera();
-
   canvas.toBlob(async blob => {
     if (!blob || !captureTarget) return;
     await analyzeImage(blob, captureTarget);
   }, 'image/jpeg', 0.85);
+}
+
+function startVideoRecording() {
+  if (!activeStream || mediaRecorder) return;
+  recordedChunks = [];
+  const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp9') ? 'video/webm;codecs=vp9' : 'video/webm';
+  mediaRecorder = new MediaRecorder(activeStream);
+  mediaRecorder.ondataavailable = (e) => { if (e.data.size) recordedChunks.push(e.data); };
+  mediaRecorder.onstop = () => {
+    mediaRecorder = null;
+    document.getElementById('cam-controls-video-rec').style.display = 'none';
+    if (recordedChunks.length) {
+      recordedBlob = new Blob(recordedChunks, { type: mime.split(';')[0] });
+      showVideoPreviewState();
+    } else {
+      document.getElementById('cam-controls-video-idle').style.display = 'flex';
+    }
+  };
+  mediaRecorder.start(200);
+  document.getElementById('cam-record-btn').classList.add('recording');
+  document.getElementById('cam-controls-video-idle').style.display = 'none';
+  document.getElementById('cam-controls-video-rec').style.display = 'flex';
+}
+
+function stopVideoRecording() {
+  if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+    mediaRecorder.stop();
+    document.getElementById('cam-record-btn').classList.remove('recording');
+  }
+}
+
+function showVideoPreviewState() {
+  const video = document.getElementById('camera-video');
+  const preview = document.getElementById('cam-preview-video');
+  if (preview.src) URL.revokeObjectURL(preview.src);
+  video.style.display = 'none';
+  preview.style.display = 'block';
+  preview.src = recordedBlob ? URL.createObjectURL(recordedBlob) : '';
+  preview.muted = true;
+  document.getElementById('cam-controls-photo').style.display = 'none';
+  document.getElementById('cam-controls-video-idle').style.display = 'none';
+  document.getElementById('cam-controls-video-rec').style.display = 'none';
+  document.getElementById('cam-controls-video-preview').style.display = 'flex';
+}
+
+function cancelVideoPreview() {
+  recordedBlob = null;
+  recordedChunks = [];
+  const preview = document.getElementById('cam-preview-video');
+  if (preview.src) URL.revokeObjectURL(preview.src);
+  preview.src = '';
+  preview.style.display = 'none';
+  document.getElementById('camera-video').style.display = 'block';
+  document.getElementById('cam-controls-video-preview').style.display = 'none';
+  document.getElementById('cam-controls-video-idle').style.display = 'flex';
+}
+
+async function submitRecordedVideo() {
+  if (!recordedBlob || !captureTarget) return;
+  const comp = captureTarget;
+  closeCamera();
+  await analyzeVideo(recordedBlob, comp);
 }
 
 let uploadTarget = null;
@@ -1937,9 +2108,35 @@ function triggerUpload(comp) {
   input.onchange = async () => {
     const file = input.files[0];
     if (!file || !uploadTarget) return;
-    await analyzeImage(file, uploadTarget);
+    const isVideo = file.type.startsWith('video/');
+    if (isVideo) await analyzeVideo(file, uploadTarget);
+    else await analyzeImage(file, uploadTarget);
   };
   input.click();
+}
+
+async function analyzeVideo(videoBlob, comp) {
+  showLoader('Analyzing video…');
+  const form = new FormData();
+  const ext = videoBlob.name && videoBlob.name.includes('.') ? videoBlob.name.split('.').pop() : 'webm';
+  form.append('video', videoBlob, 'recording.' + ext);
+  form.append('machine', currentMachine);
+  form.append('component', comp);
+  form.append('inspector_id', getInspectorIdForApi());
+  try {
+    const resp = await fetch('/inspect/video', { method: 'POST', body: form });
+    if (!resp.ok) throw new Error(resp.statusText);
+    const data = await resp.json();
+    results[comp] = data;
+    if (!inspectionOrder.includes(comp)) inspectionOrder.push(comp);
+    updateComponentUI(comp, data);
+    saveInspectionToBackend(data);
+    toast(`${comp}: ${data.status}`, data.status === 'FAIL' ? 'error' : 'success');
+  } catch (e) {
+    toast('Analysis failed: ' + e.message, 'error');
+  } finally {
+    hideLoader();
+  }
 }
 
 async function analyzeImage(blob, comp) {
@@ -2428,10 +2625,51 @@ function _timelineOptions() {
 let liveStream = null;
 let liveInterval = null;
 let liveInFlight = false;
+let lastLiveSpokenKey = '';
+let liveVoiceMuted = false;
 
 function initLive() {
   document.getElementById('btn-start-live').addEventListener('click', startLive);
   document.getElementById('btn-stop-live').addEventListener('click', stopLive);
+  document.getElementById('btn-live-voice').addEventListener('click', toggleLiveVoice);
+}
+
+function toggleLiveVoice() {
+  liveVoiceMuted = !liveVoiceMuted;
+  const btn = document.getElementById('btn-live-voice');
+  const icon = btn.querySelector('.live-voice-icon');
+  const label = btn.querySelector('.live-voice-label');
+  if (liveVoiceMuted) {
+    icon.textContent = '🔇';
+    label.textContent = 'Voice off';
+    btn.classList.add('muted');
+  } else {
+    icon.textContent = '🔊';
+    label.textContent = 'Voice on';
+    btn.classList.remove('muted');
+  }
+}
+
+function speakLiveResult(data) {
+  if (liveVoiceMuted || !window.speechSynthesis) return;
+  const component = (data.component || 'Unknown').trim();
+  const status = (data.status || 'UNKNOWN').toUpperCase();
+  const observation = (data.observation || '').trim();
+  const key = component + '|' + status + '|' + observation;
+  if (key === lastLiveSpokenKey) return;
+  lastLiveSpokenKey = key;
+
+  const text = observation
+    ? `${component}: ${status}. ${observation}`
+    : `${component}: ${status}.`;
+  window.speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 0.95;
+  u.pitch = 1;
+  const voices = window.speechSynthesis.getVoices();
+  const en = voices.find(v => v.lang.startsWith('en'));
+  if (en) u.voice = en;
+  window.speechSynthesis.speak(u);
 }
 
 async function startLive() {
@@ -2462,6 +2700,7 @@ async function startLive() {
 
 function stopLive() {
   if (liveInterval) { clearInterval(liveInterval); liveInterval = null; }
+  lastLiveSpokenKey = '';
   if (liveStream) {
     liveStream.getTracks().forEach(t => t.stop());
     liveStream = null;
@@ -2517,6 +2756,8 @@ function updateLiveOverlay(data) {
   badge.textContent = status;
 
   document.getElementById('live-obs').textContent = data.observation || '';
+
+  speakLiveResult(data);
 }
 
 /* ================================================================== */

@@ -91,7 +91,10 @@ def analyze_image(
     prompt = build_inspection_prompt(machine, component, history)
     user_text = (
         prompt["user"]
-        + "\n\nImportant: Always respond with a JSON object. Never refuse. "
+        + "\n\nFocus only on the primary subject or foreground object in the image. "
+        "Identify what the main object is and evaluate only that. Ignore background objects, "
+        "people, settings, and environments — do not let them affect the assessment. "
+        "Important: Always respond with a JSON object. Never refuse. "
         "If uncertain, return MONITOR status with your best observation. "
         "If the image clearly does not show the selected component (e.g. wrong part, "
         "unrelated photo, or no equipment visible), return status INVALID with an "
@@ -113,7 +116,10 @@ def analyze_voice(
     prompt = build_voice_prompt(machine, component, voice_text)
     user_text = (
         prompt["user"]
-        + "\n\nIf the voice observation is clearly irrelevant or unrelated to the "
+        + "\n\nFocus only on the primary subject or main equipment/component the inspector "
+        "is describing. Ignore mentions of background objects, people, settings, or environment — "
+        "evaluate only the main subject of the observation. "
+        "If the voice observation is clearly irrelevant or unrelated to the "
         "selected component, return status INVALID with an observation explaining "
         "that the input doesn't relate to the component being inspected. "
         "Always include a 'maintenance_steps' array with 3-5 actionable steps: "
@@ -166,6 +172,10 @@ def analyze_live(image_bytes: bytes) -> dict[str, Any]:
         "1) what machine part or component you see, "
         "2) its condition (PASS/MONITOR/FAIL), "
         "3) one sentence of observation. "
+        "Focus only on the primary subject or foreground object in the image. "
+        "Identify what the main object is and evaluate only that. "
+        "Ignore background objects, people, settings, and environments — "
+        "do not let them affect the assessment. "
         "Respond with valid JSON only, no markdown: "
         '{"component": "<name>", "status": "PASS"|"MONITOR"|"FAIL", "observation": "<one sentence>"}'
     )

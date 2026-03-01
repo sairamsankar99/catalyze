@@ -10,10 +10,13 @@ import hashlib
 import json
 import os
 import random
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+import cv2
 
 import httpx
 from dotenv import load_dotenv
@@ -477,6 +480,39 @@ async def get_history(
 # ---- Inspection ----------------------------------------------------------
 
 
+def _extract_middle_frame(video_bytes: bytes, filename: str = "video.mp4") -> bytes | None:
+    """Extract the middle frame from a video as JPEG bytes. Returns None on failure."""
+    ext = Path(filename).suffix or ".mp4"
+    if ext.lower() not in (".mp4", ".webm", ".mov", ".avi", ".mkv"):
+        ext = ".mp4"
+    try:
+        with tempfile.NamedTemporaryFile(suffix=ext, delete=False) as f:
+            f.write(video_bytes)
+            path = f.name
+        try:
+            cap = cv2.VideoCapture(path)
+            if not cap.isOpened():
+                return None
+            total = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            if total < 1:
+                total = 1
+            mid = (total - 1) // 2
+            cap.set(cv2.CAP_PROP_POS_FRAMES, mid)
+            ret, frame = cap.read()
+            cap.release()
+            if not ret or frame is None:
+                return None
+            _, jpeg = cv2.imencode(".jpg", frame)
+            return jpeg.tobytes()
+        finally:
+            try:
+                os.unlink(path)
+            except OSError:
+                pass
+    except Exception:
+        return None
+
+
 @app.post("/inspect/image")
 async def inspect_image(
     image: UploadFile = File(...),
@@ -498,6 +534,32 @@ async def inspect_image(
     if iid:
         result["inspector_id"] = iid
 
+    return result
+
+
+@app.post("/inspect/video")
+async def inspect_video(
+    video: UploadFile = File(...),
+    machine: str = Form(...),
+    component: str = Form(...),
+    inspector_id: str = Form(""),
+):
+    """Analyze a video by extracting the middle frame and running image analysis."""
+    video_bytes = await video.read()
+    frame_bytes = _extract_middle_frame(video_bytes, filename=video.filename or "video.mp4")
+    if not frame_bytes:
+        raise HTTPException(
+            status_code=400,
+            detail="Could not extract a frame from the video. Ensure the file is a valid video.",
+        )
+    iid = inspector_id or None
+    history = await get_inspection_history(machine, component, inspector_id=iid)
+    result = analyze_image(frame_bytes, machine, component, history)
+    result["machine"] = machine
+    result["component"] = component
+    result["timestamp"] = datetime.now(timezone.utc).isoformat()
+    if iid:
+        result["inspector_id"] = iid
     return result
 
 

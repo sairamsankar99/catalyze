@@ -1,4 +1,4 @@
-﻿fastapi
+fastapi
 uvicorn[standard]
 python-multipart
 httpx
@@ -7,3 +7,4 @@ resend
 python-dotenv
 pydantic
 google-genai
+opencv-python-headless
