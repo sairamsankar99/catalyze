@@ -738,7 +738,7 @@ async def debug_supermemory():
         # Test GET with Bearer only
         try:
             r = await client.get(
-                f"{SUPERMEMORY_BASE_URL}/v4/memories",
+                f"{SUPERMEMORY_BASE_URL}/v3/documents",
                 headers=headers_bearer,
             )
             get_bearer = {"status_code": r.status_code, "body": r.text}
@@ -751,7 +751,7 @@ async def debug_supermemory():
         # Test GET with x-api-key only
         try:
             r = await client.get(
-                f"{SUPERMEMORY_BASE_URL}/v4/memories",
+                f"{SUPERMEMORY_BASE_URL}/v3/documents",
                 headers=headers_x_api_key,
             )
             get_x_api_key = {"status_code": r.status_code, "body": r.text}
@@ -767,24 +767,19 @@ async def debug_supermemory():
         headers_both = {**base_headers, "Authorization": f"Bearer {api_key}", "x-api-key": api_key}
         try:
             save_payload = {
+                "content": "Debug test inspection.",
                 "containerTag": container_tag,
-                "memories": [
-                    {
-                        "content": "Debug test inspection.",
-                        "metadata": {
-                            "type": "inspection",
-                            "machine": "debug-machine",
-                            "component": "debug-component",
-                            "status": "PASS",
-                            "timestamp": datetime.now(timezone.utc).isoformat(),
-                            "observation": "Test from /debug/supermemory",
-                        },
-                        "isStatic": False,
-                    }
-                ],
+                "metadata": {
+                    "type": "inspection",
+                    "machine": "debug-machine",
+                    "component": "debug-component",
+                    "status": "PASS",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "observation": "Test from /debug/supermemory",
+                },
             }
             r = await client.post(
-                f"{SUPERMEMORY_BASE_URL}/v4/memories",
+                f"{SUPERMEMORY_BASE_URL}/v3/documents",
                 headers=headers_both,
                 json=save_payload,
             )
@@ -806,7 +801,7 @@ async def debug_supermemory():
                 "threshold": 0.0,
             }
             r = await client.post(
-                f"{SUPERMEMORY_BASE_URL}/v4/search",
+                f"{SUPERMEMORY_BASE_URL}/v3/search",
                 headers=headers_both,
                 json=search_payload,
             )
