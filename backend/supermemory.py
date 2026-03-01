@@ -24,6 +24,11 @@ def _headers() -> dict[str, str]:
     }
 
 
+def _sanitize_tag(inspector_id: str) -> str:
+    """Convert email to valid containerTag (alphanumeric, hyphens, underscores only)."""
+    return inspector_id.replace("@", "_at_").replace(".", "_")
+
+
 async def save_inspection_result(
     machine: str,
     component: str,
@@ -35,7 +40,7 @@ async def save_inspection_result(
         return False
 
     timestamp = result.get("timestamp") or datetime.now(timezone.utc).isoformat()
-    container_tag = inspector_id or "anonymous"
+    container_tag = _sanitize_tag(inspector_id) if inspector_id else "anonymous"
 
     content = (
         f"Inspection: {machine} — {component}. "
@@ -90,7 +95,7 @@ async def get_inspection_history(
     if not api_key:
         return []
 
-    container_tag = inspector_id or "anonymous"
+    container_tag = _sanitize_tag(inspector_id) if inspector_id else "anonymous"
     payload = {
         "q": f"{machine} {component} inspection",
         "containerTags": [container_tag],
@@ -134,7 +139,7 @@ async def get_all_inspection_results(
 
     payload = {
         "q": "inspection",
-        "containerTag": inspector_id,
+        "containerTags": [_sanitize_tag(inspector_id)],
         "limit": min(limit, 100),
     }
 
@@ -181,7 +186,7 @@ async def save_fleet(inspector_id: str, machine_names: list[str]) -> bool:
 
     payload = {
         "content": content[:10000],
-        "containerTag": inspector_id,
+        "containerTag": _sanitize_tag(inspector_id),
         "metadata": metadata,
     }
 
@@ -209,7 +214,7 @@ async def get_fleet(inspector_id: str) -> list[str]:
 
     payload = {
         "q": "fleet",
-        "containerTags": [inspector_id],
+        "containerTags": [_sanitize_tag(inspector_id)],
         "limit": 100,
     }
 
