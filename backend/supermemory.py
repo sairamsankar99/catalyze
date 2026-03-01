@@ -19,6 +19,7 @@ def _headers() -> dict[str, str]:
     api_key = os.environ.get("SUPERMEMORY_API_KEY", "")
     return {
         "Authorization": f"Bearer {api_key}",
+        "x-api-key": api_key,
         "Content-Type": "application/json",
     }
 

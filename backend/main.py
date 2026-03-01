@@ -720,33 +720,51 @@ async def debug_supermemory():
         return {
             "ok": False,
             "error": "SUPERMEMORY_API_KEY not set",
-            "get": None,
+            "get_which_works": None,
+            "get_bearer": None,
+            "get_x_api_key": None,
             "save": None,
             "search": None,
         }
-    headers = {
-        "Authorization": f"Bearer {api_key}",
-        "Content-Type": "application/json",
-    }
+    base_headers = {"Content-Type": "application/json"}
+    headers_bearer = {**base_headers, "Authorization": f"Bearer {api_key}"}
+    headers_x_api_key = {**base_headers, "x-api-key": api_key}
     container_tag = "debug-test"
-    get_resp = None
+    get_bearer = None
+    get_x_api_key = None
     save_resp = None
     search_resp = None
     async with httpx.AsyncClient(timeout=15) as client:
-        # Test GET /v4/memories (simple auth check)
+        # Test GET with Bearer only
         try:
             r = await client.get(
                 f"{SUPERMEMORY_BASE_URL}/v4/memories",
-                headers=headers,
+                headers=headers_bearer,
             )
-            get_resp = {"status_code": r.status_code, "body": r.text}
+            get_bearer = {"status_code": r.status_code, "body": r.text}
             try:
-                get_resp["json"] = r.json()
+                get_bearer["json"] = r.json()
             except Exception:
                 pass
         except Exception as e:
-            get_resp = {"error": str(e)}
-        # Test save: one minimal inspection memory
+            get_bearer = {"error": str(e)}
+        # Test GET with x-api-key only
+        try:
+            r = await client.get(
+                f"{SUPERMEMORY_BASE_URL}/v4/memories",
+                headers=headers_x_api_key,
+            )
+            get_x_api_key = {"status_code": r.status_code, "body": r.text}
+            try:
+                get_x_api_key["json"] = r.json()
+            except Exception:
+                pass
+        except Exception as e:
+            get_x_api_key = {"error": str(e)}
+        # Which GET worked (for reference)
+        get_works = "bearer" if (get_bearer and get_bearer.get("status_code") in (200, 201)) else ("x-api-key" if (get_x_api_key and get_x_api_key.get("status_code") in (200, 201)) else "neither")
+        # Test save using both headers (same as supermemory._headers())
+        headers_both = {**base_headers, "Authorization": f"Bearer {api_key}", "x-api-key": api_key}
         try:
             save_payload = {
                 "containerTag": container_tag,
@@ -767,7 +785,7 @@ async def debug_supermemory():
             }
             r = await client.post(
                 f"{SUPERMEMORY_BASE_URL}/v4/memories",
-                headers=headers,
+                headers=headers_both,
                 json=save_payload,
             )
             save_resp = {"status_code": r.status_code, "body": r.text}
@@ -777,7 +795,7 @@ async def debug_supermemory():
                 pass
         except Exception as e:
             save_resp = {"error": str(e)}
-        # Test search: list memories in the same container
+        # Test search
         try:
             search_payload = {
                 "q": "inspection",
@@ -789,7 +807,7 @@ async def debug_supermemory():
             }
             r = await client.post(
                 f"{SUPERMEMORY_BASE_URL}/v4/search",
-                headers=headers,
+                headers=headers_both,
                 json=search_payload,
             )
             search_resp = {"status_code": r.status_code, "body": r.text}
@@ -801,7 +819,9 @@ async def debug_supermemory():
             search_resp = {"error": str(e)}
     return {
         "ok": save_resp.get("status_code") in (200, 201) and search_resp.get("status_code") == 200,
-        "get": get_resp,
+        "get_which_works": get_works,
+        "get_bearer": get_bearer,
+        "get_x_api_key": get_x_api_key,
         "save": save_resp,
         "search": search_resp,
     }
