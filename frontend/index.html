@@ -612,27 +612,51 @@ input,select,textarea{font-family:inherit}
 .live-idle p{margin-top:8px;font-size:.85rem}
 
 /* ------------------------------------------------------------------ */
+/*  Touch-friendly tap targets (min 44px)                              */
+/* ------------------------------------------------------------------ */
+.btn,.icon-btn,.tab-btn,.live-voice-btn,.close-cam,.shutter-btn,.record-btn,
+.cam-cancel-btn,.cam-submit-btn,.cam-mode-btn,.fleet-inspect-btn,.mc-select-btn{
+  min-height:44px;min-width:44px;padding:12px 24px}
+.icon-btn{min-width:44px;min-height:44px;padding:0}
+.tab-btn{padding:10px 18px;min-height:44px}
+.live-voice-btn{padding:12px 18px;min-height:44px}
+.close-cam{min-width:44px;min-height:44px}
+.shutter-btn,.record-btn{min-width:64px;min-height:64px}
+
+/* ------------------------------------------------------------------ */
 /*  Responsive                                                        */
 /* ------------------------------------------------------------------ */
 @media(max-width:900px){
   .sidebar{display:none}
   .tabs{position:static;transform:none;display:flex;padding:8px 12px;gap:4px;
-    width:100%;overflow-x:auto}
+    width:100%;overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;
+    scroll-snap-type:x proximity}
+  .tab-btn{flex:0 0 auto;scroll-snap-align:start}
   #machine-grid{grid-template-columns:repeat(2,1fr)}
   .an-mid-row{grid-template-columns:1fr}
   .an-bottom-row{grid-template-columns:1fr}
+  .welcome-banner{padding:20px 16px}
+  .tab-panel{padding:16px}
 }
 @media(max-width:640px){
   #component-list{grid-template-columns:1fr}
   #machine-grid{grid-template-columns:1fr}
   .welcome-banner{flex-direction:column;text-align:center}
   .an-stats-row{grid-template-columns:1fr}
+  .app-bar{padding:10px 16px;flex-wrap:wrap}
+  .cam-viewfinder{padding:0;max-height:100dvh}
+  .cam-viewfinder-inner{min-height:100dvh;border-radius:0;max-height:100dvh}
+  .cam-viewfinder-inner video,.cam-viewfinder-inner .cam-preview-video{min-height:60dvh;max-height:100dvh}
+  .modal-overlay.open{padding:0;align-items:stretch}
+  .live-container{aspect-ratio:auto;min-height:50dvh}
+  .live-container video{min-height:50dvh}
 }
 @media(max-width:480px){
   html{font-size:14px}
   .summary-grid{grid-template-columns:repeat(2,1fr)}
   .report-table{font-size:.78rem}
-  .tab-btn{font-size:.62rem;padding:6px 10px}
+  .tab-btn{font-size:.62rem;padding:8px 14px;min-height:44px}
+  .fleet-cards{grid-template-columns:1fr}
 }
 @media print{
   .app-bar,.tabs,.sidebar,.btn{display:none!important}
@@ -712,7 +736,7 @@ input,select,textarea{font-family:inherit}
       <div class="lp-feature">
         <div class="lp-icon">🎥</div>
         <h3>Live Inspection Mode</h3>
-        <p>Point your camera at equipment and get real-time AI assessments every 3 seconds. Walk around the machine while CATalyze continuously identifies and evaluates components.</p>
+        <p>Point your camera at equipment and get real-time AI assessments every 8 seconds. Walk around the machine while CATalyze continuously identifies and evaluates components.</p>
       </div>
     </div>
   </section>
@@ -2294,13 +2318,21 @@ async function analyzeVideo(videoBlob, comp) {
   showLoader('Analyzing video…');
   const form = new FormData();
   const ext = videoBlob.name && videoBlob.name.includes('.') ? videoBlob.name.split('.').pop() : 'webm';
-  form.append('video', videoBlob, 'recording.' + ext);
+  form.append('video', videoBlob, videoBlob.name || 'recording.' + ext);
   form.append('machine', currentMachine);
   form.append('component', comp);
-  form.append('inspector_id', getInspectorIdForApi());
+  form.append('inspector_id', getInspectorIdForApi() || '');
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 120000);
   try {
-    const resp = await fetch('/inspect/video', { method: 'POST', body: form });
-    if (!resp.ok) throw new Error(resp.statusText);
+    const resp = await fetch('/inspect/video', { method: 'POST', body: form, signal: controller.signal });
+    clearTimeout(timeoutId);
+    if (!resp.ok) {
+      const errBody = await resp.text();
+      let msg = resp.statusText;
+      try { const j = JSON.parse(errBody); msg = j.detail || msg; } catch (_) {}
+      throw new Error(msg);
+    }
     const data = await resp.json();
     results[comp] = data;
     if (!inspectionOrder.includes(comp)) inspectionOrder.push(comp);
@@ -2309,7 +2341,8 @@ async function analyzeVideo(videoBlob, comp) {
     pushToInspectionCache(currentMachine, comp, data);
     toast(`${comp}: ${data.status}`, data.status === 'FAIL' ? 'error' : 'success');
   } catch (e) {
-    toast('Analysis failed: ' + e.message, 'error');
+    clearTimeout(timeoutId);
+    toast('Analysis failed: ' + (e.name === 'AbortError' ? 'Request timed out' : e.message), 'error');
   } finally {
     hideLoader();
   }
@@ -2321,7 +2354,7 @@ async function analyzeImage(blob, comp) {
   form.append('image', blob, 'capture.jpg');
   form.append('machine', currentMachine);
   form.append('component', comp);
-  form.append('inspector_id', getInspectorId());
+  form.append('inspector_id', getInspectorIdForApi() || '');
   try {
     const resp = await fetch('/inspect/image', { method: 'POST', body: form });
     if (!resp.ok) throw new Error(resp.statusText);
@@ -2390,7 +2423,7 @@ async function analyzeVoice(comp, text) {
     const resp = await fetch('/inspect/voice', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ machine: currentMachine, component: comp, voice_text: text, inspector_id: getInspectorId() }),
+      body: JSON.stringify({ machine: currentMachine, component: comp, voice_text: text, inspector_id: getInspectorIdForApi() || '' }),
     });
     if (!resp.ok) throw new Error(resp.statusText);
     const data = await resp.json();
@@ -2857,6 +2890,9 @@ let liveInterval = null;
 let liveInFlight = false;
 let lastLiveSpokenKey = '';
 let liveVoiceMuted = false;
+let liveCurrentAudio = null;
+let lastNoDetectionTTS = 0;
+const NO_DETECTION_COOLDOWN_MS = 15000;
 
 function initLive() {
   document.getElementById('btn-start-live').addEventListener('click', startLive);
@@ -2866,6 +2902,11 @@ function initLive() {
 
 function toggleLiveVoice() {
   liveVoiceMuted = !liveVoiceMuted;
+  if (liveVoiceMuted && liveCurrentAudio) {
+    liveCurrentAudio.pause();
+    liveCurrentAudio.currentTime = 0;
+    liveCurrentAudio = null;
+  }
   const btn = document.getElementById('btn-live-voice');
   const icon = btn.querySelector('.live-voice-icon');
   const label = btn.querySelector('.live-voice-label');
@@ -2880,12 +2921,22 @@ function toggleLiveVoice() {
   }
 }
 
+function isNoDetectionObservation(obs) {
+  if (!obs || typeof obs !== 'string') return false;
+  const lower = obs.toLowerCase();
+  return /object not detected|no equipment visible|nothing visible|cannot see|unable to (detect|see)|no (component|part|equipment) (visible|detected)/i.test(lower);
+}
+
 async function speakLiveResult(data) {
   if (liveVoiceMuted) return;
   const observation = (data.observation || '').trim();
   if (!observation) return;
   const key = (data.component || '') + '|' + (data.status || '') + '|' + observation;
   if (key === lastLiveSpokenKey) return;
+  if (isNoDetectionObservation(observation)) {
+    if (Date.now() - lastNoDetectionTTS < NO_DETECTION_COOLDOWN_MS) return;
+    lastNoDetectionTTS = Date.now();
+  }
   lastLiveSpokenKey = key;
 
   try {
@@ -2897,7 +2948,13 @@ async function speakLiveResult(data) {
     if (!resp.ok) return;
     const json = await resp.json();
     const b64 = json.audio_base64;
-    if (b64) new Audio('data:audio/mp3;base64,' + b64).play();
+    if (b64) {
+      if (liveCurrentAudio) { liveCurrentAudio.pause(); liveCurrentAudio = null; }
+      const audio = new Audio('data:audio/mp3;base64,' + b64);
+      liveCurrentAudio = audio;
+      audio.play().catch(() => {});
+      audio.onended = () => { if (liveCurrentAudio === audio) liveCurrentAudio = null; };
+    }
   } catch (_) { /* ignore */ }
 }
 
@@ -2924,7 +2981,7 @@ async function startLive() {
   document.getElementById('live-badge').className = 'live-badge pending';
   document.getElementById('live-obs').textContent = 'Waiting for first analysis…';
 
-  liveInterval = setInterval(captureLiveFrame, 3000);
+  liveInterval = setInterval(captureLiveFrame, 8000);
 }
 
 function stopLive() {
