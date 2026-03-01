@@ -83,8 +83,13 @@ async def save_inspection_result(
                 headers=_headers(),
                 json=payload,
             )
-            return resp.status_code in (200, 201)
-        except httpx.HTTPError:
+            if resp.status_code in (200, 201):
+                print(f"[Supermemory] save_inspection_result OK: status={resp.status_code}")
+                return True
+            print(f"[Supermemory] save_inspection_result HTTP error: status={resp.status_code} body={resp.text!r}")
+            return False
+        except Exception as e:
+            print(f"[Supermemory] save_inspection_result error: {e!r}")
             return False
 
 
@@ -130,6 +135,7 @@ async def get_inspection_history(
                 json=payload,
             )
             if resp.status_code != 200:
+                print(f"[Supermemory] get_inspection_history HTTP error: status={resp.status_code} body={resp.text!r}")
                 return []
 
             data = resp.json()
@@ -142,7 +148,8 @@ async def get_inspection_history(
                 else:
                     records.append(r)
             return records
-        except httpx.HTTPError:
+        except Exception as e:
+            print(f"[Supermemory] get_inspection_history error: {e!r}")
             return []
 
 
@@ -181,6 +188,7 @@ async def get_all_inspection_results(
                 json=payload,
             )
             if resp.status_code != 200:
+                print(f"[Supermemory] get_all_inspection_results HTTP error: status={resp.status_code} body={resp.text!r}")
                 return []
 
             data = resp.json()
@@ -193,7 +201,8 @@ async def get_all_inspection_results(
                 else:
                     records.append(r)
             return records
-        except httpx.HTTPError:
+        except Exception as e:
+            print(f"[Supermemory] get_all_inspection_results error: {e!r}")
             return []
 
 
@@ -233,8 +242,13 @@ async def save_fleet(inspector_id: str, machine_names: list[str]) -> bool:
                 headers=_headers(),
                 json=payload,
             )
-            return resp.status_code in (200, 201)
-        except httpx.HTTPError:
+            if resp.status_code in (200, 201):
+                print(f"[Supermemory] save_fleet OK: status={resp.status_code}")
+                return True
+            print(f"[Supermemory] save_fleet HTTP error: status={resp.status_code} body={resp.text!r}")
+            return False
+        except Exception as e:
+            print(f"[Supermemory] save_fleet error: {e!r}")
             return False
 
 
@@ -269,6 +283,7 @@ async def get_fleet(inspector_id: str) -> list[str]:
                 json=payload,
             )
             if resp.status_code != 200:
+                print(f"[Supermemory] get_fleet HTTP error: status={resp.status_code} body={resp.text!r}")
                 return []
 
             data = resp.json()
@@ -285,5 +300,6 @@ async def get_fleet(inspector_id: str) -> list[str]:
                 if best is None or ts > (best.get("timestamp") or ""):
                     best = meta
             return best.get("machines", []) if best else []
-        except httpx.HTTPError:
+        except Exception as e:
+            print(f"[Supermemory] get_fleet error: {e!r}")
             return []

@@ -30,6 +30,7 @@ load_dotenv()
 
 from backend.modal_functions import analyze_image, analyze_live, analyze_voice, identify_part
 from backend.supermemory import (
+    SUPERMEMORY_BASE_URL,
     get_all_inspection_results,
     get_fleet,
     get_inspection_history,
@@ -692,6 +693,91 @@ async def inspect_live(req: LiveRequest):
     image_bytes = base64.b64decode(req.image_base64)
     result = analyze_live(image_bytes)
     return result
+
+
+# ---- Debug -----------------------------------------------------------------
+
+
+@app.get("/debug/supermemory")
+async def debug_supermemory():
+    """
+    Run a test save and test search against Supermemory and return raw API responses
+    so we can verify the integration is working (e.g. in Railway logs).
+    """
+    api_key = os.environ.get("SUPERMEMORY_API_KEY", "")
+    if not api_key:
+        return {
+            "ok": False,
+            "error": "SUPERMEMORY_API_KEY not set",
+            "save": None,
+            "search": None,
+        }
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json",
+    }
+    container_tag = "debug-test"
+    save_resp = None
+    search_resp = None
+    async with httpx.AsyncClient(timeout=15) as client:
+        # Test save: one minimal inspection memory
+        try:
+            save_payload = {
+                "containerTag": container_tag,
+                "memories": [
+                    {
+                        "content": "Debug test inspection.",
+                        "metadata": {
+                            "type": "inspection",
+                            "machine": "debug-machine",
+                            "component": "debug-component",
+                            "status": "PASS",
+                            "timestamp": datetime.now(timezone.utc).isoformat(),
+                            "observation": "Test from /debug/supermemory",
+                        },
+                        "isStatic": False,
+                    }
+                ],
+            }
+            r = await client.post(
+                f"{SUPERMEMORY_BASE_URL}/v4/memories",
+                headers=headers,
+                json=save_payload,
+            )
+            save_resp = {"status_code": r.status_code, "body": r.text}
+            try:
+                save_resp["json"] = r.json()
+            except Exception:
+                pass
+        except Exception as e:
+            save_resp = {"error": str(e)}
+        # Test search: list memories in the same container
+        try:
+            search_payload = {
+                "q": "inspection",
+                "containerTag": container_tag,
+                "filters": {"AND": [{"filterType": "metadata", "key": "type", "value": "inspection"}]},
+                "limit": 5,
+                "searchMode": "memories",
+                "threshold": 0.0,
+            }
+            r = await client.post(
+                f"{SUPERMEMORY_BASE_URL}/v4/search",
+                headers=headers,
+                json=search_payload,
+            )
+            search_resp = {"status_code": r.status_code, "body": r.text}
+            try:
+                search_resp["json"] = r.json()
+            except Exception:
+                pass
+        except Exception as e:
+            search_resp = {"error": str(e)}
+    return {
+        "ok": save_resp.get("status_code") in (200, 201) and search_resp.get("status_code") == 200,
+        "save": save_resp,
+        "search": search_resp,
+    }
 
 
 # ---- Parts identification ------------------------------------------------

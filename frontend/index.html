@@ -1316,6 +1316,7 @@ let mediaRecorder = null;
 let recordedChunks = [];
 let recordedBlob = null;
 let pastInspectionCache = [];  // all inspection results fetched from GET /inspect/results (persists across machine switch)
+let inspectionTimelineList = [];  // every inspection as a separate entry for timeline chart (append on each new result)
 let userFleet = [];  // machine names in user's fleet (from GET /fleet + localStorage)
 let addMachineMode = false;   // when true, machine grid click adds to fleet and selects
 let analyticsMachine = '';    // selected machine in Analytics tab (from fleet)
@@ -1544,6 +1545,14 @@ async function loadPastResultsAndRestore() {
     if (resultsResp.ok) {
       const data = await resultsResp.json();
       pastInspectionCache = data.results || [];
+      inspectionTimelineList = (data.results || []).map(r => ({
+        machine: r.machine,
+        component: r.component,
+        timestamp: r.timestamp || r.date || new Date().toISOString(),
+        status: r.status,
+        confidence: r.confidence,
+        observation: r.observation || '',
+      }));
     }
     if (fleetResp.ok) {
       const fleetData = await fleetResp.json();
@@ -1851,6 +1860,7 @@ function initSignIn() {
     results = {};
     inspectionOrder = [];
     pastInspectionCache = [];
+    inspectionTimelineList = [];
     userFleet = [];
     localStorage.removeItem(FLEET_STORAGE_KEY);
     currentMachine = '';
@@ -2376,6 +2386,16 @@ function pushToInspectionCache(machine, component, data) {
   const record = { machine, component, ...data, timestamp: data.timestamp || new Date().toISOString() };
   pastInspectionCache = pastInspectionCache.filter(r => !(r.machine === machine && r.component === component));
   pastInspectionCache.push(record);
+  inspectionTimelineList.push({
+    machine,
+    component,
+    timestamp: record.timestamp,
+    status: data.status,
+    confidence: data.confidence,
+    observation: data.observation || '',
+  });
+  if (timelineChart && document.getElementById('tab-analytics').classList.contains('active'))
+    renderTimelineChart(analyticsMachine || currentMachine);
 }
 
 /* ================================================================== */
@@ -2748,135 +2768,116 @@ function renderAnalytics() {
 
     const analyticsResults = Object.fromEntries(entries);
     const analyticsOrder = entries.map(([c]) => c);
-    const timelineOrder = timelineComponentFilter
-      ? analyticsOrder.filter(c => c === timelineComponentFilter)
-      : analyticsOrder;
+    const timelineOrder = analyticsOrder;
     const compSelect = document.getElementById('timeline-component-select');
     if (compSelect) {
       compSelect.innerHTML = '<option value="">All Components</option>' +
         analyticsOrder.map(c => `<option value="${esc(c)}" ${c === timelineComponentFilter ? 'selected' : ''}>${c}</option>`).join('');
     }
-    renderSessionTimeline(analyticsResults, timelineOrder);
-    fetchAndRenderTimeline(machine, analyticsResults, timelineOrder);
+    renderTimelineChart(machine);
   });
 }
 
-function renderSessionTimeline(resultsOverride, orderOverride) {
-  const res = resultsOverride != null ? resultsOverride : results;
-  const order = orderOverride != null ? orderOverride : inspectionOrder;
-  const orderFiltered = timelineComponentFilter ? order.filter(c => c === timelineComponentFilter) : order;
-  if (orderFiltered.length < 1) return;
-
-  const labels = orderFiltered.map((_, i) => `#${i + 1}`);
-  const datasets = orderFiltered.map((comp, ci) => ({
-    label: comp.length > 16 ? comp.slice(0, 14) + '…' : comp,
-    data: orderFiltered.map(c => c === comp ? statusToScore(res[comp]?.status) : null),
-    borderColor: LINE_COLORS[ci % LINE_COLORS.length],
-    backgroundColor: LINE_COLORS[ci % LINE_COLORS.length],
-    tension: 0.3,
-    pointRadius: 5,
-    spanGaps: false,
-  }));
-
-  const tlCanvas = _freshCanvas('timeline-chart');
-  if (timelineChart) timelineChart.destroy();
-  timelineChart = new Chart(tlCanvas, {
-    type: 'line',
-    data: { labels, datasets },
-    options: _timelineOptions(),
-  });
+function formatTimelineLabel(iso) {
+  const d = new Date(iso);
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return m + '/' + day + ' ' + h + ':' + min;
 }
 
-async function fetchAndRenderTimeline(machineOverride, resultsOverride, orderOverride) {
+function renderTimelineChart(machineOverride) {
   const machine = machineOverride != null ? machineOverride : currentMachine;
-  const res = resultsOverride != null ? resultsOverride : results;
-  const order = orderOverride != null ? orderOverride : Object.keys(res);
-  const comps = timelineComponentFilter ? order.filter(c => c === timelineComponentFilter) : order;
-  if (!machine || comps.length === 0) return;
-  const inspectorId = getInspectorIdForApi();
+  if (!machine) return;
 
-  const allRecords = {};
-  const fetches = comps.map(async comp => {
-    const qs = new URLSearchParams({ machine, component: comp, limit: '20' });
-    if (inspectorId) qs.set('inspector_id', inspectorId);
-    try {
-      const resp = await fetch('/history?' + qs);
-      if (!resp.ok) return;
-      const data = await resp.json();
-      if (data.records && data.records.length > 0) allRecords[comp] = data.records;
-    } catch { /* ignore */ }
-  });
+  let list = inspectionTimelineList.filter(r => (r.machine || '') === machine);
+  if (timelineComponentFilter) list = list.filter(r => (r.component || '') === timelineComponentFilter);
+  list = list.slice().sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+  if (list.length < 1) return;
 
-  await Promise.all(fetches);
-
-  const hasHistory = Object.values(allRecords).some(r => r.length > 0);
-  if (!hasHistory) return;
-
-  const allDates = new Set();
-  Object.values(allRecords).forEach(recs => recs.forEach(r => {
-    if (r.date) allDates.add(r.date);
+  const labels = list.map(r => formatTimelineLabel(r.timestamp));
+  const dataPoints = list.map(r => ({
+    y: statusToScore(r.status),
+    _raw: r,
   }));
-  const now = new Date().toISOString();
-  allDates.add(now);
-  const sortedDates = [...allDates].sort();
 
-  const labels = sortedDates.map(d => {
-    const dt = new Date(d);
-    return dt.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  });
-
-  const datasets = comps.map((comp, ci) => {
-    const history = allRecords[comp] || [];
-    const dateMap = {};
-    history.forEach(r => { if (r.date) dateMap[r.date] = statusToScore(r.status); });
-    dateMap[now] = statusToScore(res[comp]?.status);
-
-    return {
-      label: comp.length > 16 ? comp.slice(0, 14) + '…' : comp,
-      data: sortedDates.map(d => dateMap[d] ?? null),
-      borderColor: LINE_COLORS[ci % LINE_COLORS.length],
-      backgroundColor: LINE_COLORS[ci % LINE_COLORS.length],
-      tension: 0.3,
-      pointRadius: 4,
-      spanGaps: true,
-    };
-  });
+  const dataset = {
+    label: 'Health %',
+    data: dataPoints,
+    borderColor: LINE_COLORS[0],
+    backgroundColor: LINE_COLORS[0],
+    tension: 0.2,
+    pointRadius: 6,
+    pointHoverRadius: 8,
+    spanGaps: false,
+  };
 
   const tlCanvas = _freshCanvas('timeline-chart');
   if (timelineChart) timelineChart.destroy();
   timelineChart = new Chart(tlCanvas, {
     type: 'line',
-    data: { labels, datasets },
+    data: {
+      labels,
+      datasets: [dataset],
+    },
     options: _timelineOptions(),
   });
-
   document.getElementById('timeline-note').style.display = 'block';
 }
 
 function _timelineOptions() {
   const chartFont = { family: "'Inter', system-ui, sans-serif" };
   return {
-    responsive: true, maintainAspectRatio: true,
+    responsive: true,
+    maintainAspectRatio: true,
     layout: { padding: { top: 8, bottom: 8, left: 4, right: 12 } },
+    interaction: { intersect: false, mode: 'index' },
     scales: {
       y: {
-        min: 0, max: 100,
+        min: 0,
+        max: 100,
         ticks: {
-          color: '#888', stepSize: 50, font: { size: 13, ...chartFont },
-          callback: v => v === 100 ? 'PASS' : v === 50 ? 'MONITOR' : 'FAIL',
+          color: '#888',
+          stepSize: 25,
+          font: { size: 13, ...chartFont },
+          callback: v => (v == null ? '' : v + '%'),
         },
         grid: { color: '#1E2130' },
-        title: { display: true, text: 'Status', color: '#fff', font: { size: 13, weight: 'bold', ...chartFont } },
+        title: { display: true, text: 'Health %', color: '#fff', font: { size: 13, weight: 'bold', ...chartFont } },
       },
       x: {
-        ticks: { color: '#888', font: { size: 13, ...chartFont } },
+        ticks: { color: '#888', font: { size: 11, ...chartFont }, maxRotation: 45, minRotation: 45 },
         grid: { color: '#151720' },
       },
     },
     plugins: {
-      legend: {
-        position: 'bottom',
-        labels: { color: '#E8E9ED', padding: 14, font: { size: 13, ...chartFont }, boxWidth: 12 },
+      legend: { display: false },
+      tooltip: {
+        callbacks: {
+          label: function(context) {
+            const raw = context.raw && context.raw._raw;
+            if (!raw) return context.dataset.label + ': ' + context.parsed.y + '%';
+            const dt = formatTimelineLabel(raw.timestamp);
+            const status = (raw.status || '—').toUpperCase();
+            const conf = raw.confidence != null ? Math.round((raw.confidence || 0) * 100) + '%' : '—';
+            const obs = (raw.observation || '').trim() || '—';
+            return [
+              'Date/time: ' + dt,
+              'Status: ' + status,
+              'Confidence: ' + conf,
+              'Observation: ' + obs,
+            ];
+          },
+        },
+        titleFont: { size: 13, weight: 'bold' },
+        bodyFont: { size: 12 },
+        padding: 12,
+        backgroundColor: 'rgba(18, 20, 28, 0.95)',
+        titleColor: '#FFCD11',
+        bodyColor: '#E8E9ED',
+        borderColor: '#252838',
+        borderWidth: 1,
       },
     },
   };
