@@ -607,16 +607,16 @@ input,select,textarea{font-family:inherit}
   <!-- Stats bar -->
   <div class="lp-stats-bar" id="lp-stats-bar">
     <div class="lp-stat">
-      <div class="lp-stat-num" data-target="500">0</div>
-      <div class="lp-stat-label">Inspections Completed</div>
-    </div>
-    <div class="lp-stat">
-      <div class="lp-stat-num" data-target="99">0</div>
-      <div class="lp-stat-label">AI Accuracy %</div>
-    </div>
-    <div class="lp-stat">
       <div class="lp-stat-num" data-target="8">0</div>
       <div class="lp-stat-label">CAT Models Supported</div>
+    </div>
+    <div class="lp-stat">
+      <div class="lp-stat-num" data-target="50" data-suffix="+">0</div>
+      <div class="lp-stat-label">Components Tracked</div>
+    </div>
+    <div class="lp-stat">
+      <div class="lp-stat-num">⚡</div>
+      <div class="lp-stat-label">Real-Time AI Analysis</div>
     </div>
   </div>
 
@@ -1150,7 +1150,8 @@ function initStatsCounters() {
       fired = true;
       bar.querySelectorAll('.lp-stat-num').forEach(el => {
         const target = parseInt(el.dataset.target, 10);
-        const suffix = target === 99 ? '%' : target === 500 ? '+' : '';
+        if (isNaN(target)) return;
+        const suffix = el.dataset.suffix || '';
         const duration = 1600;
         const start = performance.now();
         function tick(now) {
