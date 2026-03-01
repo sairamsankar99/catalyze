@@ -18,6 +18,7 @@ SUPERMEMORY_BASE_URL = "https://api.supermemory.ai"
 def _headers() -> dict[str, str]:
     api_key = os.environ.get("SUPERMEMORY_API_KEY", "")
     return {
+        "Authorization": f"Bearer {api_key}",
         "x-supermemory-api-key": api_key,
         "Content-Type": "application/json",
     }
@@ -92,7 +93,7 @@ async def get_inspection_history(
     container_tag = inspector_id or "anonymous"
     payload = {
         "q": f"{machine} {component} inspection",
-        "containerTag": container_tag,
+        "containerTags": [container_tag],
         "limit": min(limit, 100),
     }
 
@@ -212,7 +213,7 @@ async def get_fleet(inspector_id: str) -> list[str]:
 
     payload = {
         "q": "fleet",
-        "containerTag": inspector_id,
+        "containerTags": [inspector_id],
         "limit": 100,
     }
 
