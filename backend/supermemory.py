@@ -116,10 +116,8 @@ async def get_inspection_history(
             records = []
             for r in results:
                 meta = r.get("metadata")
-                if isinstance(meta, dict):
+                if isinstance(meta, dict) and meta.get("type") == "inspection":
                     records.append(meta)
-                else:
-                    records.append(r)
             return records
         except Exception as e:
             print(f"[Supermemory] get_inspection_history error: {e!r}")
@@ -159,10 +157,8 @@ async def get_all_inspection_results(
             records = []
             for r in results:
                 meta = r.get("metadata")
-                if isinstance(meta, dict):
+                if isinstance(meta, dict) and meta.get("type") == "inspection":
                     records.append(meta)
-                else:
-                    records.append(r)
             return records
         except Exception as e:
             print(f"[Supermemory] get_all_inspection_results error: {e!r}")
@@ -233,11 +229,13 @@ async def get_fleet(inspector_id: str) -> list[str]:
             if not results and isinstance(data, list):
                 results = data
             results = results or []
-            best: dict[str, Any] | None = None
+            records = []
             for r in results:
                 meta = r.get("metadata")
-                if not isinstance(meta, dict):
-                    continue
+                if isinstance(meta, dict) and meta.get("type") == "fleet":
+                    records.append(meta)
+            best: dict[str, Any] | None = None
+            for meta in records:
                 machines = meta.get("machines")
                 if not isinstance(machines, list):
                     continue
