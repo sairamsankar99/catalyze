@@ -720,6 +720,7 @@ async def debug_supermemory():
         return {
             "ok": False,
             "error": "SUPERMEMORY_API_KEY not set",
+            "get": None,
             "save": None,
             "search": None,
         }
@@ -728,9 +729,23 @@ async def debug_supermemory():
         "Content-Type": "application/json",
     }
     container_tag = "debug-test"
+    get_resp = None
     save_resp = None
     search_resp = None
     async with httpx.AsyncClient(timeout=15) as client:
+        # Test GET /v4/memories (simple auth check)
+        try:
+            r = await client.get(
+                f"{SUPERMEMORY_BASE_URL}/v4/memories",
+                headers=headers,
+            )
+            get_resp = {"status_code": r.status_code, "body": r.text}
+            try:
+                get_resp["json"] = r.json()
+            except Exception:
+                pass
+        except Exception as e:
+            get_resp = {"error": str(e)}
         # Test save: one minimal inspection memory
         try:
             save_payload = {
@@ -786,6 +801,7 @@ async def debug_supermemory():
             search_resp = {"error": str(e)}
     return {
         "ok": save_resp.get("status_code") in (200, 201) and search_resp.get("status_code") == 200,
+        "get": get_resp,
         "save": save_resp,
         "search": search_resp,
     }
