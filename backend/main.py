@@ -26,7 +26,11 @@ from pydantic import BaseModel
 load_dotenv()
 
 from backend.modal_functions import analyze_image, analyze_live, analyze_voice, identify_part
-from backend.supermemory import get_inspection_history, save_inspection_result
+from backend.supermemory import (
+    get_all_inspection_results,
+    get_inspection_history,
+    save_inspection_result,
+)
 from prompts.inspection import MACHINES
 
 # ---------------------------------------------------------------------------
@@ -94,6 +98,18 @@ class ReportRequest(BaseModel):
     results: list[dict[str, Any]]
     machine: str
     inspector: str | None = None
+
+
+class SaveInspectionRequest(BaseModel):
+    machine: str
+    component: str
+    status: str
+    observation: str | None = None
+    confidence: float | None = None
+    recommended_action: str | None = None
+    maintenance_steps: list[str] | None = None
+    timestamp: str | None = None
+    inspector_id: str | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -482,7 +498,6 @@ async def inspect_image(
     if iid:
         result["inspector_id"] = iid
 
-    await save_inspection_result(machine, component, result, inspector_id=iid)
     return result
 
 
@@ -502,10 +517,34 @@ async def inspect_voice(req: VoiceRequest):
     if iid:
         result["inspector_id"] = iid
 
-    await save_inspection_result(
+    return result
+
+
+@app.post("/inspect/save")
+async def inspect_save(req: SaveInspectionRequest):
+    """Save an inspection result to Supermemory (called by frontend after each success)."""
+    iid = req.inspector_id or None
+    result = {
+        "status": req.status,
+        "observation": req.observation or "",
+        "confidence": req.confidence,
+        "recommended_action": req.recommended_action,
+        "maintenance_steps": req.maintenance_steps or [],
+        "timestamp": req.timestamp,
+    }
+    ok = await save_inspection_result(
         req.machine, req.component, result, inspector_id=iid
     )
-    return result
+    return {"success": ok}
+
+
+@app.get("/inspect/results")
+async def get_inspect_results(
+    inspector_id: str = Query(..., description="Logged-in user email or ID"),
+):
+    """Return all past inspection results for the given inspector from Supermemory."""
+    records = await get_all_inspection_results(inspector_id)
+    return {"results": records}
 
 
 # ---- Report --------------------------------------------------------------

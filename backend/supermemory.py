@@ -61,6 +61,41 @@ async def get_inspection_history(
             return []
 
 
+async def get_all_inspection_results(
+    inspector_id: str,
+    limit: int = 500,
+) -> list[dict[str, Any]]:
+    """Retrieve all inspection records for an inspector from Supermemory."""
+    api_key = os.environ.get("SUPERMEMORY_API_KEY", "")
+    if not api_key:
+        return []
+
+    filters: dict[str, str] = {
+        "metadata.inspector_id": inspector_id,
+        "metadata.type": "inspection",
+    }
+
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            resp = await client.post(
+                f"{SUPERMEMORY_BASE_URL}/search",
+                headers=_headers(),
+                json={
+                    "query": "inspection",
+                    "limit": limit,
+                    "filters": filters,
+                },
+            )
+            if resp.status_code != 200:
+                return []
+
+            data = resp.json()
+            return [r.get("metadata", r) for r in data.get("results", [])]
+
+        except httpx.HTTPError:
+            return []
+
+
 async def save_inspection_result(
     machine: str,
     component: str,
@@ -72,7 +107,7 @@ async def save_inspection_result(
     if not api_key:
         return False
 
-    timestamp = datetime.now(timezone.utc).isoformat()
+    timestamp = result.get("timestamp") or datetime.now(timezone.utc).isoformat()
     content = (
         f"Inspection: {machine} — {component}\n"
         f"Inspector: {inspector_id or 'unknown'}\n"

@@ -1190,16 +1190,39 @@ let recognition = null;    // SpeechRecognition instance
 
 let pendingVerifyEmail = '';
 function getInspectorId() { return localStorage.getItem('catalyze_inspector') || ''; }
+function getInspectorIdForApi() { return localStorage.getItem('catalyze_user_id') || getInspectorId(); }
+
+async function saveInspectionToBackend(data) {
+  const inspectorId = getInspectorIdForApi();
+  if (!inspectorId) return;
+  try {
+    await fetch('/inspect/save', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        machine: data.machine,
+        component: data.component,
+        status: data.status || '',
+        observation: data.observation || '',
+        confidence: data.confidence,
+        recommended_action: data.recommended_action || null,
+        maintenance_steps: data.maintenance_steps || null,
+        timestamp: data.timestamp || new Date().toISOString(),
+        inspector_id: inspectorId,
+      }),
+    });
+  } catch (_) { /* fire-and-forget */ }
+}
 
 /* ================================================================== */
 /*  Boot                                                              */
 /* ================================================================== */
 document.addEventListener('DOMContentLoaded', async () => {
-  initSignIn();
   initPwToggles();
   initTabs();
   initStatsCounters();
   await loadMachines();
+  initSignIn();
   initCamera();
   initPartsID();
   initLive();
@@ -1251,6 +1274,46 @@ function showApp() {
   document.getElementById('welcome-date').textContent =
     now.toLocaleDateString('en-US', {weekday:'long',month:'long',day:'numeric',year:'numeric'}) +
     ' · ' + now.toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
+  loadPastResultsAndRestore();
+}
+
+async function loadPastResultsAndRestore() {
+  const inspectorId = getInspectorIdForApi();
+  if (!inspectorId) return;
+  const lastMachine = localStorage.getItem('catalyze_last_machine') || '';
+  if (lastMachine) selectMachine(lastMachine);
+
+  try {
+    const resp = await fetch('/inspect/results?inspector_id=' + encodeURIComponent(inspectorId));
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const list = data.results || [];
+    if (list.length === 0 || !currentMachine) return;
+
+    const forMachine = list.filter(r => (r.machine || '') === currentMachine);
+    const byComponent = {};
+    forMachine.forEach(r => {
+      const comp = r.component;
+      if (!comp) return;
+      const existing = byComponent[comp];
+      const date = r.date || r.timestamp || '';
+      if (!existing || date > (existing.date || existing.timestamp || ''))
+        byComponent[comp] = r;
+    });
+    const sorted = Object.values(byComponent).sort((a, b) => {
+      const da = a.date || a.timestamp || '';
+      const db = b.date || b.timestamp || '';
+      return da.localeCompare(db);
+    });
+
+    sorted.forEach(r => {
+      const comp = r.component;
+      results[comp] = r;
+      if (!inspectionOrder.includes(comp)) inspectionOrder.push(comp);
+    });
+    Object.keys(results).forEach(comp => updateComponentUI(comp, results[comp]));
+    updateProgress();
+  } catch (_) { /* ignore */ }
 }
 
 function showLanding() {
@@ -1350,6 +1413,7 @@ function initSignIn() {
       const data = await resp.json();
       if (!data.success) throw new Error(data.error || 'Login failed');
       localStorage.setItem('catalyze_inspector', data.username || data.user_id);
+      if (data.user_id) localStorage.setItem('catalyze_user_id', data.user_id);
       showApp();
     } catch (e) {
       loginErr.textContent = e.message;
@@ -1437,6 +1501,7 @@ function initSignIn() {
       const data = await resp.json();
       if (!data.success) throw new Error(data.error || 'Verification failed');
       localStorage.setItem('catalyze_inspector', data.username || data.user_id);
+      if (data.user_id) localStorage.setItem('catalyze_user_id', data.user_id);
       showApp();
     } catch (e) {
       verifyErr.textContent = e.message;
@@ -1538,6 +1603,7 @@ function initSignIn() {
   // --- Sign out ---
   document.getElementById('btn-logout').addEventListener('click', () => {
     localStorage.removeItem('catalyze_inspector');
+    localStorage.removeItem('catalyze_user_id');
     pill.textContent = '';
     results = {};
     inspectionOrder = [];
@@ -1637,6 +1703,7 @@ function renderMachineGrid() {
 
 function selectMachine(name) {
   currentMachine = name;
+  if (name) localStorage.setItem('catalyze_last_machine', name);
   results = {};
   inspectionOrder = [];
   const list = document.getElementById('component-list');
@@ -1889,6 +1956,7 @@ async function analyzeImage(blob, comp) {
     results[comp] = data;
     if (!inspectionOrder.includes(comp)) inspectionOrder.push(comp);
     updateComponentUI(comp, data);
+    saveInspectionToBackend(data);
     toast(`${comp}: ${data.status}`, data.status === 'FAIL' ? 'error' : 'success');
   } catch (e) {
     toast('Analysis failed: ' + e.message, 'error');
@@ -1949,6 +2017,7 @@ async function analyzeVoice(comp, text) {
     results[comp] = data;
     if (!inspectionOrder.includes(comp)) inspectionOrder.push(comp);
     updateComponentUI(comp, data);
+    saveInspectionToBackend(data);
     toast(`${comp}: ${data.status}`, data.status === 'FAIL' ? 'error' : 'success');
   } catch (e) {
     toast('Voice analysis failed: ' + e.message, 'error');
