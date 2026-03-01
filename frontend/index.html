@@ -1475,19 +1475,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadMachines();
   loadFleetFromStorage();
   renderFleetSection();
-  document.getElementById('btn-add-machine').addEventListener('click', () => {
+  const btnAddMachine = document.getElementById('btn-add-machine');
+  if (btnAddMachine) btnAddMachine.addEventListener('click', () => {
     addMachineMode = true;
-    document.getElementById('machine-selector-block').style.display = 'block';
+    const block = document.getElementById('machine-selector-block');
+    if (block) block.style.display = 'block';
     renderMachineGrid();
   });
   initCamera();
   initPartsID();
   initLive();
   initQuickActions();
-  document.getElementById('btn-report').addEventListener('click', generateReport);
-  document.getElementById('btn-download-pdf').addEventListener('click', downloadReportPDF);
-  document.getElementById('btn-download-csv').addEventListener('click', downloadReportCSV);
-  document.getElementById('btn-copy-link').addEventListener('click', copyShareLink);
+  const btnReport = document.getElementById('btn-report');
+  if (btnReport) btnReport.addEventListener('click', generateReport);
+  const btnPdf = document.getElementById('btn-download-pdf');
+  if (btnPdf) btnPdf.addEventListener('click', downloadReportPDF);
+  const btnCsv = document.getElementById('btn-download-csv');
+  if (btnCsv) btnCsv.addEventListener('click', downloadReportCSV);
+  const btnCopy = document.getElementById('btn-copy-link');
+  if (btnCopy) btnCopy.addEventListener('click', copyShareLink);
 });
 
 function initLandingParticles() {
@@ -1534,27 +1540,36 @@ function initLandingParticles() {
 function initStatsCounters() {
   const bar = document.getElementById('lp-stats-bar');
   if (!bar) return;
+  function animateCounters() {
+    bar.querySelectorAll('.lp-stat-num').forEach(el => {
+      const target = parseInt(el.dataset.target, 10);
+      if (isNaN(target)) return;
+      const suffix = el.dataset.suffix || '';
+      const duration = 1600;
+      const start = performance.now();
+      function tick(now) {
+        const p = Math.min((now - start) / duration, 1);
+        const ease = 1 - Math.pow(1 - p, 3);
+        el.textContent = Math.round(target * ease) + suffix;
+        if (p < 1) requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+    });
+  }
   let fired = false;
   const observer = new IntersectionObserver(entries => {
-    if (entries[0].isIntersecting && !fired) {
+    if (entries.length && entries[0].isIntersecting && !fired) {
       fired = true;
-      bar.querySelectorAll('.lp-stat-num').forEach(el => {
-        const target = parseInt(el.dataset.target, 10);
-        if (isNaN(target)) return;
-        const suffix = el.dataset.suffix || '';
-        const duration = 1600;
-        const start = performance.now();
-        function tick(now) {
-          const p = Math.min((now - start) / duration, 1);
-          const ease = 1 - Math.pow(1 - p, 3);
-          el.textContent = Math.round(target * ease) + suffix;
-          if (p < 1) requestAnimationFrame(tick);
-        }
-        requestAnimationFrame(tick);
-      });
+      animateCounters();
     }
-  }, {threshold: 0.3});
+  }, { threshold: 0.3 });
   observer.observe(bar);
+  setTimeout(function() {
+    if (!fired && bar.getBoundingClientRect().top < window.innerHeight) {
+      fired = true;
+      animateCounters();
+    }
+  }, 400);
 }
 
 /* ================================================================== */
@@ -1651,15 +1666,19 @@ function showLanding() {
 function openAuth(mode) {
   if (mode !== 'verify') clearAuthForms();
   const overlay = document.getElementById('auth-overlay');
-  overlay.classList.remove('hidden');
-  document.getElementById('auth-signin').style.display = mode === 'login' ? 'block' : 'none';
-  document.getElementById('auth-signup').style.display = mode === 'register' ? 'block' : 'none';
-  document.getElementById('auth-verify').style.display = mode === 'verify' ? 'block' : 'none';
-  document.getElementById('auth-forgot').style.display = mode === 'forgot' ? 'block' : 'none';
-  if (mode === 'login') document.getElementById('login-email').focus();
-  else if (mode === 'register') document.getElementById('reg-email').focus();
-  else if (mode === 'verify') document.getElementById('verify-code').focus();
-  else if (mode === 'forgot') document.getElementById('forgot-email').focus();
+  if (overlay) overlay.classList.remove('hidden');
+  const signinEl = document.getElementById('auth-signin');
+  const signupEl = document.getElementById('auth-signup');
+  const verifyEl = document.getElementById('auth-verify');
+  const forgotEl = document.getElementById('auth-forgot');
+  if (signinEl) signinEl.style.display = mode === 'login' ? 'block' : 'none';
+  if (signupEl) signupEl.style.display = mode === 'register' ? 'block' : 'none';
+  if (verifyEl) verifyEl.style.display = mode === 'verify' ? 'block' : 'none';
+  if (forgotEl) forgotEl.style.display = mode === 'forgot' ? 'block' : 'none';
+  if (mode === 'login') { const el = document.getElementById('login-email'); if (el) el.focus(); }
+  else if (mode === 'register') { const el = document.getElementById('reg-email'); if (el) el.focus(); }
+  else if (mode === 'verify') { const el = document.getElementById('verify-code'); if (el) el.focus(); }
+  else if (mode === 'forgot') { const el = document.getElementById('forgot-email'); if (el) el.focus(); }
 }
 
 function clearAuthForms() {
@@ -1700,15 +1719,22 @@ function initSignIn() {
   if (lpSignIn) lpSignIn.addEventListener('click', (e) => { e.preventDefault(); openAuth('login'); });
   const lpGetStarted = document.getElementById('lp-get-started');
   if (lpGetStarted) lpGetStarted.addEventListener('click', (e) => { e.preventDefault(); openAuth('register'); });
-  document.getElementById('show-signup').addEventListener('click', () => openAuth('register'));
-  document.getElementById('show-signin').addEventListener('click', () => openAuth('login'));
-  document.getElementById('show-forgot').addEventListener('click', () => openAuth('forgot'));
-  document.getElementById('back-to-login').addEventListener('click', () => openAuth('login'));
-  document.getElementById('back-to-signup').addEventListener('click', () => openAuth('register'));
+  const showSignup = document.getElementById('show-signup');
+  if (showSignup) showSignup.addEventListener('click', (e) => { e.preventDefault(); openAuth('register'); });
+  const showSignin = document.getElementById('show-signin');
+  if (showSignin) showSignin.addEventListener('click', (e) => { e.preventDefault(); openAuth('login'); });
+  const showForgot = document.getElementById('show-forgot');
+  if (showForgot) showForgot.addEventListener('click', (e) => { e.preventDefault(); openAuth('forgot'); });
+  const backToLogin = document.getElementById('back-to-login');
+  if (backToLogin) backToLogin.addEventListener('click', (e) => { e.preventDefault(); openAuth('login'); });
+  const backToSignup = document.getElementById('back-to-signup');
+  if (backToSignup) backToSignup.addEventListener('click', (e) => { e.preventDefault(); openAuth('register'); });
 
-  document.getElementById('auth-close-btn').addEventListener('click', () => {
+  const authCloseBtn = document.getElementById('auth-close-btn');
+  if (authCloseBtn) authCloseBtn.addEventListener('click', () => {
     clearAuthForms();
-    document.getElementById('auth-overlay').classList.add('hidden');
+    const overlay = document.getElementById('auth-overlay');
+    if (overlay) overlay.classList.add('hidden');
   });
 
   // --- Login ---
@@ -1959,7 +1985,8 @@ function initPwToggles() {
   document.querySelectorAll('.pw-toggle').forEach(btn => {
     btn.innerHTML = EYE_OPEN;
     btn.addEventListener('click', () => {
-      const input = btn.parentElement.querySelector('input');
+      const input = btn.parentElement && btn.parentElement.querySelector('input');
+      if (!input) return;
       const showing = input.type === 'text';
       input.type = showing ? 'password' : 'text';
       btn.innerHTML = showing ? EYE_OPEN : EYE_CLOSED;
@@ -1973,20 +2000,24 @@ function initPwToggles() {
 function initTabs() {
   document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', () => {
+      const tabId = btn.dataset.tab;
       document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
       document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
       btn.classList.add('active');
-      document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-      if (btn.dataset.tab !== 'live') stopLive();
-      if (btn.dataset.tab === 'analytics') renderAnalytics();
+      const panel = tabId ? document.getElementById('tab-' + tabId) : null;
+      if (panel) panel.classList.add('active');
+      if (tabId !== 'live') stopLive();
+      if (tabId === 'analytics') renderAnalytics();
     });
   });
-  document.getElementById('analytics-machine-select').addEventListener('change', function() {
+  const analyticsSelect = document.getElementById('analytics-machine-select');
+  if (analyticsSelect) analyticsSelect.addEventListener('change', function() {
     analyticsMachine = this.value || '';
     timelineComponentFilter = '';
     renderAnalytics();
   });
-  document.getElementById('timeline-component-select').addEventListener('change', function() {
+  const timelineSelect = document.getElementById('timeline-component-select');
+  if (timelineSelect) timelineSelect.addEventListener('change', function() {
     timelineComponentFilter = this.value || '';
     if (timelineChart && document.getElementById('tab-analytics').classList.contains('active'))
       renderAnalytics();
@@ -2585,8 +2616,8 @@ async function downloadReportPDF() {
     doc.setTextColor(232, 233, 237);
     doc.text((r.component || '—').slice(0, 20), 14, y);
     const status = (r.status || '—').toUpperCase();
-    const [r, g, b] = status === 'PASS' ? [34, 197, 94] : status === 'FAIL' ? [239, 68, 68] : [234, 179, 8];
-    doc.setTextColor(r, g, b);
+    const [rr, gg, bb] = status === 'PASS' ? [34, 197, 94] : status === 'FAIL' ? [239, 68, 68] : [234, 179, 8];
+    doc.setTextColor(rr, gg, bb);
     doc.text(status, 60, y);
     doc.setTextColor(232, 233, 237);
     doc.text((r.confidence != null ? Math.round(r.confidence * 100) + '%' : '—'), 90, y);
