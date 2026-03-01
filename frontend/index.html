@@ -2585,7 +2585,8 @@ async function downloadReportPDF() {
     doc.setTextColor(232, 233, 237);
     doc.text((r.component || '—').slice(0, 20), 14, y);
     const status = (r.status || '—').toUpperCase();
-    doc.setTextColor(status === 'PASS' ? 34, 197, 94 : status === 'FAIL' ? 239, 68, 68 : 234, 179, 8);
+    const [r, g, b] = status === 'PASS' ? [34, 197, 94] : status === 'FAIL' ? [239, 68, 68] : [234, 179, 8];
+    doc.setTextColor(r, g, b);
     doc.text(status, 60, y);
     doc.setTextColor(232, 233, 237);
     doc.text((r.confidence != null ? Math.round(r.confidence * 100) + '%' : '—'), 90, y);
