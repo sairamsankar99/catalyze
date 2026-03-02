@@ -1627,12 +1627,15 @@ function applyResultsForMachine(machineName) {
     const db = b.date || b.timestamp || '';
     return da.localeCompare(db);
   });
+  // Reset in-memory results so we only show data for this machine
+  results = {};
+  inspectionOrder = [];
   sorted.forEach(r => {
     const comp = r.component;
     results[comp] = r;
-    if (!inspectionOrder.includes(comp)) inspectionOrder.push(comp);
+    inspectionOrder.push(comp);
+    updateComponentUI(comp, r);
   });
-  Object.keys(results).forEach(comp => updateComponentUI(comp, results[comp]));
   updateProgress();
 }
 
@@ -2181,6 +2184,7 @@ function createComponentCard(comp) {
       <button class="icon-btn" title="Capture photo" onclick="openCamera('${esc(comp)}')">📷</button>
       <button class="icon-btn" title="Upload image" onclick="triggerUpload('${esc(comp)}')">📁</button>
       <button class="icon-btn" id="mic-${slugify(comp)}" title="Voice observation" onclick="toggleVoice('${esc(comp)}')">🎙️</button>
+      <button class="icon-btn" id="del-${slugify(comp)}" title="Clear inspection" style="display:none" onclick="clearComponentInspection('${esc(comp)}')">🗑️</button>
     </div>
     <div class="comp-observation" id="obs-${slugify(comp)}"></div>
     <div class="comp-action" id="act-${slugify(comp)}"></div>
@@ -2238,6 +2242,8 @@ function updateComponentUI(comp, data) {
   const timeEl = document.getElementById('time-' + s);
   if (timeEl) timeEl.textContent = 'Inspected ' + new Date().toLocaleTimeString('en-US', {hour:'numeric',minute:'2-digit'});
   if (card) card.classList.add('done');
+  const delBtn = document.getElementById('del-' + s);
+  if (delBtn) delBtn.style.display = 'inline-flex';
   updateCompSparkline(comp);
   updateProgress();
 }
@@ -2251,6 +2257,41 @@ function updateProgress() {
   updateSidebar();
   updateActivityFeed();
   renderFleetSection();
+}
+
+function clearComponentInspection(comp) {
+  const s = slugify(comp);
+  // Remove from in-memory maps
+  delete results[comp];
+  inspectionOrder = inspectionOrder.filter(c => c !== comp);
+  pastInspectionCache = pastInspectionCache.filter(r => !((r.machine || '') === currentMachine && (r.component || '') === comp));
+  inspectionTimelineList = inspectionTimelineList.filter(r => !((r.machine || '') === currentMachine && (r.component || '') === comp));
+
+  // Reset UI for this component card
+  const badge = document.getElementById('badge-' + s);
+  const timeEl = document.getElementById('time-' + s);
+  const obs = document.getElementById('obs-' + s);
+  const act = document.getElementById('act-' + s);
+  const stepsEl = document.getElementById('steps-' + s);
+  const spark = document.getElementById('spark-' + s);
+  const card = document.getElementById('card-' + s);
+  const delBtn = document.getElementById('del-' + s);
+  if (badge) {
+    badge.className = 'badge pending';
+    badge.textContent = 'Pending';
+  }
+  if (timeEl) timeEl.textContent = 'Not inspected yet';
+  if (obs) obs.textContent = '';
+  if (act) act.textContent = '';
+  if (stepsEl) stepsEl.innerHTML = '';
+  if (spark) spark.innerHTML = '';
+  if (card) card.classList.remove('done');
+  if (delBtn) delBtn.style.display = 'none';
+
+  // Refresh analytics and timeline after removal
+  updateCompSparkline(comp);
+  updateProgress();
+  renderAnalytics();
 }
 
 function updateHeroHealth() {
@@ -2597,11 +2638,14 @@ function renderReport(report) {
 }
 
 async function generateReportAudio() {
-  if (!lastReportText) {
+  const summaryText = lastReportText || (lastReport && buildReportSummaryText());
+  if (!summaryText) {
     toast('Generate a report first, then try audio.', 'error');
     return;
   }
   const btn = document.getElementById('btn-audio-report');
+  const audioEl = document.getElementById('report-audio');
+  const noAudioEl = document.getElementById('no-audio');
   if (btn) {
     btn.disabled = true;
     btn.textContent = 'Generating audio…';
@@ -2610,17 +2654,27 @@ async function generateReportAudio() {
     const resp = await fetch('/report/audio', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text: lastReportText }),
+      body: JSON.stringify({ text: summaryText }),
     });
     if (!resp.ok) throw new Error(resp.statusText);
     const data = await resp.json();
     const b64 = data.audio_base64;
     if (!b64) {
-      toast('Audio could not be generated.', 'error');
+      toast('Audio could not be generated. Check server logs.', 'error');
+      if (noAudioEl) { noAudioEl.style.display = 'block'; noAudioEl.textContent = 'Voice summary unavailable — check ELEVENLABS_API_KEY and server logs.'; }
       return;
     }
-    const audio = new Audio('data:audio/mp3;base64,' + b64);
-    audio.play().catch(() => {});
+    const dataUrl = 'data:audio/mpeg;base64,' + b64;
+    if (audioEl) {
+      audioEl.src = dataUrl;
+      audioEl.style.display = 'block';
+      if (noAudioEl) noAudioEl.style.display = 'none';
+      audioEl.play().catch(() => {});
+    } else {
+      const audio = new Audio(dataUrl);
+      audio.play().catch(() => {});
+    }
+    toast('Playing audio report', 'success');
   } catch (e) {
     toast('Audio report failed: ' + e.message, 'error');
   } finally {
@@ -2629,6 +2683,19 @@ async function generateReportAudio() {
       btn.textContent = 'Generate Audio Report';
     }
   }
+}
+
+function buildReportSummaryText() {
+  if (!lastReport || !lastReport.results) return '';
+  const s = lastReport.summary || {};
+  const lines = [
+    'Inspection Report for ' + (currentMachine || 'Equipment'),
+    'Summary: ' + (s.pass || 0) + ' Pass, ' + (s.monitor || 0) + ' Monitor, ' + (s.fail || 0) + ' Fail out of ' + (s.total || 0) + ' components.',
+  ];
+  (lastReport.results || []).slice(0, 20).forEach(function(r) {
+    lines.push((r.component || '') + ': ' + (r.status || '') + '. ' + (r.observation || '').slice(0, 80));
+  });
+  return lines.join(' ');
 }
 
 async function downloadReportPDF() {

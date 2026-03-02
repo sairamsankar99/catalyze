@@ -359,20 +359,22 @@ async def _elevenlabs_tts(text: str) -> bytes | None:
     """Generate speech audio via ElevenLabs. Returns MP3 bytes or None."""
     api_key = os.environ.get("ELEVENLABS_API_KEY")
     if not api_key:
+        print("[ElevenLabs] ELEVENLABS_API_KEY not set; skipping TTS")
         return None
 
     voice_id = os.environ.get("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM")
+    url = f"{ELEVENLABS_TTS_URL}/{voice_id}?output_format=mp3_44100_128"
 
     async with httpx.AsyncClient(timeout=60) as client:
         try:
             resp = await client.post(
-                f"{ELEVENLABS_TTS_URL}/{voice_id}",
+                url,
                 headers={
                     "xi-api-key": api_key,
                     "Content-Type": "application/json",
                 },
                 json={
-                    "text": text,
+                    "text": text[:25000] if text else "",  # API limit
                     "model_id": "eleven_turbo_v2",
                     "voice_settings": {
                         "stability": 0.5,
@@ -382,8 +384,13 @@ async def _elevenlabs_tts(text: str) -> bytes | None:
             )
             if resp.status_code == 200:
                 return resp.content
-        except httpx.HTTPError:
-            pass
+            print(
+                f"[ElevenLabs] TTS failed: status={resp.status_code}, body={resp.text[:500]}"
+            )
+        except httpx.HTTPError as e:
+            print(f"[ElevenLabs] TTS HTTP error: {e}")
+        except Exception as e:
+            print(f"[ElevenLabs] TTS error: {e}")
 
     return None
 
@@ -688,11 +695,14 @@ async def generate_report(req: ReportRequest):
 
 @app.post("/report/audio")
 async def report_audio(req: ReportAudioRequest):
-    """Generate an ElevenLabs audio track for a full report text."""
+    """Generate an ElevenLabs audio track for report text. Request: {text: '...'}. Response: {audio_base64: '...'}."""
     text = (req.text or "").strip()
     if not text:
+        print("[report/audio] Empty text received")
         return {"audio_base64": None}
     audio_bytes = await _elevenlabs_tts(text)
+    if not audio_bytes:
+        print("[report/audio] ElevenLabs TTS returned no audio")
     audio_base64 = (
         base64.b64encode(audio_bytes).decode() if audio_bytes else None
     )
