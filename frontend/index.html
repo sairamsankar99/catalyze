@@ -1410,10 +1410,25 @@ function addToFleet(name) {
   saveFleetToBackend();
 }
 
-function removeFromFleet(name) {
+async function removeFromFleet(name) {
+  const inspectorId = getInspectorIdForApi();
+  if (inspectorId) {
+    try {
+      const resp = await fetch('/inspect/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inspector_id: inspectorId, machine: name }),
+      });
+      if (!resp.ok) console.warn('inspect/delete failed:', resp.status);
+    } catch (e) {
+      console.warn('inspect/delete error:', e);
+    }
+  }
+
   userFleet = userFleet.filter(m => m !== name);
   pastInspectionCache = pastInspectionCache.filter(r => (r.machine || '') !== name);
   inspectionTimelineList = inspectionTimelineList.filter(r => (r.machine || '') !== name);
+
   if (currentMachine === name) {
     results = {};
     inspectionOrder = [];
@@ -1428,10 +1443,18 @@ function removeFromFleet(name) {
     const sbName = document.getElementById('sb-machine-name');
     if (sbName) sbName.textContent = '';
   }
+
+  if (lastReport && lastReport.summary && lastReport.summary.machine === name) {
+    lastReport = null;
+    lastReportText = '';
+    document.getElementById('report-empty').style.display = 'block';
+    document.getElementById('report-content').style.display = 'none';
+  }
+
   persistFleet();
   saveFleetToBackend();
   renderFleetSection();
-  if (document.getElementById('tab-analytics').classList.contains('active')) renderAnalytics();
+  renderAnalytics();
   updateProgress();
 }
 
@@ -1510,7 +1533,7 @@ function renderFleetSection() {
       const machine = btn.dataset.machine;
       if (!machine) return;
       const confirmed = await confirmDeleteMachine(machine);
-      if (confirmed) removeFromFleet(machine);
+      if (confirmed) await removeFromFleet(machine);
     });
   });
 }

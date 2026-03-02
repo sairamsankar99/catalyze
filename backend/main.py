@@ -33,6 +33,7 @@ load_dotenv(_project_root / ".env")
 from backend.modal_functions import analyze_image, analyze_live, analyze_voice, identify_part
 from backend.supermemory import (
     SUPERMEMORY_BASE_URL,
+    delete_inspection_results_for_machine,
     get_all_inspection_results,
     get_fleet,
     get_inspection_history,
@@ -123,6 +124,11 @@ class SaveInspectionRequest(BaseModel):
 class FleetSaveRequest(BaseModel):
     inspector_id: str | None = None
     machines: list[str] = []
+
+
+class InspectDeleteRequest(BaseModel):
+    inspector_id: str
+    machine: str
 
 
 class TtsSpeakRequest(BaseModel):
@@ -632,6 +638,15 @@ async def get_inspect_results(
     """Return all past inspection results for the given inspector from Supermemory."""
     records = await get_all_inspection_results(inspector_id)
     return {"results": records}
+
+
+@app.post("/inspect/delete")
+async def inspect_delete(req: InspectDeleteRequest):
+    """Delete all inspection documents for the given inspector + machine from Supermemory."""
+    ok, deleted_count = await delete_inspection_results_for_machine(
+        req.inspector_id, req.machine
+    )
+    return {"success": ok, "deleted_count": deleted_count}
 
 
 @app.post("/fleet/save")

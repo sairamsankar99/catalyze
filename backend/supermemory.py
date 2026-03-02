@@ -129,6 +129,92 @@ async def get_inspection_history(
             return []
 
 
+async def delete_inspection_results_for_machine(
+    inspector_id: str,
+    machine: str,
+) -> tuple[bool, int]:
+    """Delete all Supermemory inspection documents for the given inspector + machine.
+    Returns (success, deleted_count)."""
+    api_key = os.environ.get("SUPERMEMORY_API_KEY", "")
+    if not api_key:
+        print("[Supermemory] delete_inspection_results_for_machine: no API key")
+        return False, 0
+
+    container_tag = _sanitize_tag(inspector_id)
+    payload = {
+        "q": "inspection",
+        "containerTags": [container_tag],
+        "limit": 500,
+        "filters": {
+            "AND": [
+                {"filterType": "metadata", "key": "type", "value": "inspection"},
+                {"filterType": "metadata", "key": "machine", "value": machine},
+            ]
+        },
+    }
+
+    doc_ids: list[str] = []
+    async with httpx.AsyncClient(timeout=15) as client:
+        try:
+            resp = await client.post(
+                f"{SUPERMEMORY_BASE_URL}/v3/search",
+                headers=_headers(),
+                json=payload,
+            )
+            if resp.status_code != 200:
+                print(
+                    f"[Supermemory] delete search HTTP error: status={resp.status_code} body={resp.text!r}"
+                )
+                return False, 0
+
+            data = resp.json()
+            results = data.get("results")
+            if not results and isinstance(data, list):
+                results = data
+            results = results or []
+            seen: set[str] = set()
+            for r in results:
+                meta = r.get("metadata")
+                if not isinstance(meta, dict) or meta.get("type") != "inspection":
+                    continue
+                if (meta.get("machine") or "") != machine:
+                    continue
+                doc_id = r.get("documentId") or r.get("id") or r.get("docId")
+                if doc_id and doc_id not in seen:
+                    seen.add(doc_id)
+                    doc_ids.append(doc_id)
+        except Exception as e:
+            print(f"[Supermemory] delete_inspection_results_for_machine search error: {e!r}")
+            return False, 0
+
+    if not doc_ids:
+        return True, 0
+
+    total_deleted = 0
+    async with httpx.AsyncClient(timeout=15) as client:
+        for i in range(0, len(doc_ids), 100):
+            chunk = doc_ids[i : i + 100]
+            try:
+                del_resp = await client.delete(
+                    f"{SUPERMEMORY_BASE_URL}/v3/documents/bulk",
+                    headers=_headers(),
+                    json={"ids": chunk},
+                )
+                if del_resp.status_code == 200:
+                    body = del_resp.json()
+                    total_deleted += body.get("deletedCount", 0)
+                else:
+                    print(
+                        f"[Supermemory] bulk delete HTTP error: status={del_resp.status_code} body={del_resp.text!r}"
+                    )
+            except Exception as e:
+                print(f"[Supermemory] bulk delete error: {e!r}")
+                return False, total_deleted
+
+    print(f"[Supermemory] delete_inspection_results_for_machine: deleted {total_deleted} docs for machine={machine!r}")
+    return True, total_deleted
+
+
 async def get_all_inspection_results(
     inspector_id: str,
     limit: int = 500,
