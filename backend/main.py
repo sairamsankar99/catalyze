@@ -129,6 +129,10 @@ class TtsSpeakRequest(BaseModel):
     text: str = ""
 
 
+class ReportAudioRequest(BaseModel):
+    text: str
+
+
 # ---------------------------------------------------------------------------
 # Auth — username + password (in-memory store, hashed with SHA-256)
 # ---------------------------------------------------------------------------
@@ -680,6 +684,19 @@ async def generate_report(req: ReportRequest):
         "audio_base64": audio_base64,
         "audio_unavailable_reason": audio_unavailable_reason,
     }
+
+
+@app.post("/report/audio")
+async def report_audio(req: ReportAudioRequest):
+    """Generate an ElevenLabs audio track for a full report text."""
+    text = (req.text or "").strip()
+    if not text:
+        return {"audio_base64": None}
+    audio_bytes = await _elevenlabs_tts(text)
+    audio_base64 = (
+        base64.b64encode(audio_bytes).decode() if audio_bytes else None
+    )
+    return {"audio_base64": audio_base64}
 
 
 @app.post("/tts/speak")

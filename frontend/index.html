@@ -136,7 +136,11 @@ input,select,textarea{font-family:inherit}
 .fleet-section h2{font-size:.9rem;font-weight:700;margin-bottom:12px;color:var(--text);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
 .fleet-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px;margin-bottom:12px}
 .fleet-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);
-  padding:16px;transition:all .3s ease}
+  padding:16px;transition:all .3s ease;position:relative}
+.fleet-card-remove{position:absolute;top:8px;right:8px;width:22px;height:22px;border-radius:50%;
+  border:none;background:rgba(239,68,68,.12);color:#fecaca;font-size:.8rem;display:flex;
+  align-items:center;justify-content:center;cursor:pointer;transition:background .2s,color .2s,transform .1s}
+.fleet-card-remove:hover{background:rgba(239,68,68,.2);color:#fee2e2;transform:scale(1.05)}
 .fleet-card-name{font-weight:700;font-size:.95rem;margin-bottom:6px;display:flex;align-items:center;gap:8px}
 .fleet-card-health{font-size:.75rem;color:var(--text-dim);margin-bottom:2px}
 .fleet-card-date{font-size:.7rem;color:var(--text-dim);margin-bottom:10px}
@@ -1094,6 +1098,7 @@ input,select,textarea{font-family:inherit}
       <p id="no-audio" style="font-size:.78rem;color:var(--text-dim);margin-top:6px;display:none">
         Voice summary unavailable.
       </p>
+      <button type="button" class="btn btn-secondary" id="btn-audio-report" style="margin-top:8px">Generate Audio Report</button>
     </div>
 
     <div class="report-divider"></div>
@@ -1427,6 +1432,7 @@ function renderFleetSection() {
     const healthStr = health != null ? health + '%' : '—';
     const healthColor = health != null ? (health >= 80 ? 'var(--pass)' : health >= 50 ? 'var(--monitor)' : 'var(--fail)') : 'var(--text-dim)';
     return `<div class="fleet-card">
+      <button type="button" class="fleet-card-remove" title="Remove from fleet" data-machine="${esc(name)}">✕</button>
       <div class="fleet-card-name">${getMachineIcon(name)} ${name}</div>
       <div class="fleet-card-health" style="color:${healthColor}">Health: ${healthStr}</div>
       <div class="fleet-card-date">Last: ${date || 'Never'}</div>
@@ -1437,6 +1443,14 @@ function renderFleetSection() {
     btn.addEventListener('click', () => {
       const machine = btn.dataset.machine;
       if (machine) { selectMachine(machine); document.getElementById('machine-selector-block').style.display = 'none'; addMachineMode = false; }
+    });
+  });
+  container.querySelectorAll('.fleet-card-remove').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const machine = btn.dataset.machine;
+      if (!machine) return;
+      removeFromFleet(machine);
     });
   });
 }
@@ -1494,6 +1508,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (btnCsv) btnCsv.addEventListener('click', downloadReportCSV);
   const btnCopy = document.getElementById('btn-copy-link');
   if (btnCopy) btnCopy.addEventListener('click', copyShareLink);
+  const btnAudioReport = document.getElementById('btn-audio-report');
+  if (btnAudioReport) btnAudioReport.addEventListener('click', generateReportAudio);
 });
 
 function initLandingParticles() {
@@ -2533,9 +2549,11 @@ async function generateReport() {
 }
 
 let lastReport = null;
+let lastReportText = '';
 
 function renderReport(report) {
   lastReport = report;
+  lastReportText = report.report_text || '';
   document.getElementById('report-empty').style.display = 'none';
   document.getElementById('report-content').style.display = 'block';
 
@@ -2576,6 +2594,41 @@ function renderReport(report) {
     `;
     tbody.appendChild(tr);
   });
+}
+
+async function generateReportAudio() {
+  if (!lastReportText) {
+    toast('Generate a report first, then try audio.', 'error');
+    return;
+  }
+  const btn = document.getElementById('btn-audio-report');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Generating audio…';
+  }
+  try {
+    const resp = await fetch('/report/audio', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: lastReportText }),
+    });
+    if (!resp.ok) throw new Error(resp.statusText);
+    const data = await resp.json();
+    const b64 = data.audio_base64;
+    if (!b64) {
+      toast('Audio could not be generated.', 'error');
+      return;
+    }
+    const audio = new Audio('data:audio/mp3;base64,' + b64);
+    audio.play().catch(() => {});
+  } catch (e) {
+    toast('Audio report failed: ' + e.message, 'error');
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Generate Audio Report';
+    }
+  }
 }
 
 async function downloadReportPDF() {
