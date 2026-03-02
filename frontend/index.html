@@ -486,6 +486,13 @@ input,select,textarea{font-family:inherit}
 .auth-overlay{position:fixed;inset:0;z-index:500;background:rgba(0,0,0,.7);
   display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)}
 .auth-overlay.hidden{display:none}
+.confirm-overlay{position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.7);
+  display:flex;align-items:center;justify-content:center;backdrop-filter:blur(8px)}
+.confirm-overlay.hidden{display:none}
+.confirm-box{background:var(--surface);border:1px solid var(--surface3);border-radius:var(--radius-lg);
+  padding:24px 28px;max-width:400px;box-shadow:var(--shadow-lg)}
+.confirm-msg{font-size:.95rem;color:var(--text);margin-bottom:20px;line-height:1.5}
+.confirm-btns{display:flex;gap:12px;justify-content:flex-end}
 .auth-box{background:var(--surface);border:1px solid var(--surface3);border-radius:var(--radius-lg);
   padding:36px 32px;width:90%;max-width:420px;box-shadow:var(--shadow-lg)}
 .auth-box h2{font-size:1.3rem;font-weight:700;margin-bottom:4px;text-align:center}
@@ -1333,6 +1340,17 @@ input,select,textarea{font-family:inherit}
 <!-- Toast -->
 <div class="toast" id="toast"></div>
 
+<!-- Delete machine confirm dialog -->
+<div class="confirm-overlay hidden" id="delete-machine-confirm">
+  <div class="confirm-box">
+    <p id="delete-machine-msg" class="confirm-msg"></p>
+    <div class="confirm-btns">
+      <button type="button" class="btn btn-secondary" id="delete-machine-cancel">Cancel</button>
+      <button type="button" class="btn btn-primary" id="delete-machine-confirm-btn" style="background:var(--fail);border-color:var(--fail)">Yes, Delete</button>
+    </div>
+  </div>
+</div>
+
 <!-- Hidden file input for component image upload -->
 <input type="file" id="comp-upload-input" accept="image/*" hidden>
 
@@ -1394,8 +1412,49 @@ function addToFleet(name) {
 
 function removeFromFleet(name) {
   userFleet = userFleet.filter(m => m !== name);
+  pastInspectionCache = pastInspectionCache.filter(r => (r.machine || '') !== name);
+  inspectionTimelineList = inspectionTimelineList.filter(r => (r.machine || '') !== name);
+  if (currentMachine === name) {
+    results = {};
+    inspectionOrder = [];
+    currentMachine = '';
+    localStorage.removeItem('catalyze_last_machine');
+    const list = document.getElementById('component-list');
+    if (list) list.innerHTML = '';
+    const header = document.getElementById('checklist-header');
+    if (header) header.style.display = 'none';
+    const sel = document.getElementById('machine-select');
+    if (sel) sel.value = '';
+    const sbName = document.getElementById('sb-machine-name');
+    if (sbName) sbName.textContent = '';
+  }
   persistFleet();
   saveFleetToBackend();
+  renderFleetSection();
+  if (document.getElementById('tab-analytics').classList.contains('active')) renderAnalytics();
+  updateProgress();
+}
+
+function confirmDeleteMachine(name) {
+  return new Promise(function(resolve) {
+    const overlay = document.getElementById('delete-machine-confirm');
+    const msg = document.getElementById('delete-machine-msg');
+    const cancelBtn = document.getElementById('delete-machine-cancel');
+    const confirmBtn = document.getElementById('delete-machine-confirm-btn');
+    if (!overlay || !msg) { resolve(false); return; }
+    msg.textContent = 'Are you sure you want to delete ' + name + '? This will permanently delete all inspection history for this machine.';
+    overlay.classList.remove('hidden');
+    function close(result) {
+      overlay.classList.add('hidden');
+      cancelBtn.removeEventListener('click', onCancel);
+      confirmBtn.removeEventListener('click', onConfirm);
+      resolve(result);
+    }
+    function onCancel() { close(false); }
+    function onConfirm() { close(true); }
+    cancelBtn.addEventListener('click', onCancel);
+    confirmBtn.addEventListener('click', onConfirm);
+  });
 }
 
 function getMachineHealthScore(machineName) {
@@ -1446,11 +1505,12 @@ function renderFleetSection() {
     });
   });
   container.querySelectorAll('.fleet-card-remove').forEach(btn => {
-    btn.addEventListener('click', (e) => {
+    btn.addEventListener('click', async (e) => {
       e.stopPropagation();
       const machine = btn.dataset.machine;
       if (!machine) return;
-      removeFromFleet(machine);
+      const confirmed = await confirmDeleteMachine(machine);
+      if (confirmed) removeFromFleet(machine);
     });
   });
 }
